@@ -1,0 +1,121 @@
+<style>
+
+body {
+background: #aaa;
+}
+  
+.sgc_frame {
+  font-family: consolas;
+  display: grid;
+  grid-template-columns: repeat(16,80px);
+}
+
+.clk {
+
+	background: pink;
+}
+ 
+
+  background: #744b3f;
+  }
+ 
+
+ 
+
+
+</style>
+
+
+<body>
+
+<input id="file_loader" type="file" accept=".sgc" onchange="load_file(event.target.files)" ></input>
+<div id="main_div"></div>
+
+</body>
+
+
+<script>
+
+function dec_to_hex(dec){
+
+	if(dec < 0){
+		return "XX";
+	}
+	if(dec > 255){
+		return "XX";
+	}
+	
+	var hex_lut = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"];
+	var i = dec%16;
+	var j = (dec-i)/16;
+	
+	return hex_lut[j] + hex_lut[i];
+
+}
+
+
+function dec_to_bin(dec){
+
+	if(dec < 0){
+		return "xxxxxxxx";
+	}
+	if(dec > 255){
+		return "xxxxxxxx";
+	}
+	
+	var str = dec.toString(2).replaceAll("0", ".");
+	while(str.length < 8){
+		str = "." + str;
+	}
+	
+	return str
+
+}
+
+var context = {};
+
+function load_file(files){
+
+	const reader = new FileReader();
+  reader.addEventListener('loadend', (event) => {
+    //console.log(event.target.result);
+	
+	//content of file is loaded into memory of this page  // - odd way to do ?
+	//eval(event.target.result);
+	console.log("file_loaded");
+	
+	/*
+	div_file = document.createElement("div");
+	//div_file.innerText = event.target.result;
+	div_file.setAttribute("id", "div_file");
+	document.body.appendChild(div_file);
+	*/
+
+	const data_view = new DataView(event.target.result);
+	
+	for(i=0; i< data_view.byteLength; i+=9){
+		var div = document.createElement("div");
+		div.setAttribute("class", "sgc_frame");
+		div.innerHTML += "<span class='clk'>"+ (data_view.getUint8(i+0) + data_view.getUint8(i+1)*256) +"</span>";
+		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+2))+"</span>";
+		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+3))+"</span>";
+		div.innerHTML += "<span>"+ data_view.getUint8(i+4)+"</span>";
+		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+5))+"</span>";
+		div.innerHTML += "<span>"+ data_view.getUint8(i+6)+"</span>";
+		div.innerHTML += "<span>"+ data_view.getUint8(i+7)+"</span>";
+		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+8))+"</span>";
+		document.querySelector("#main_div").appendChild(div);
+	}
+	
+	
+	document.querySelector("#file_loader").style.setProperty("background", "#cbf");
+  });
+
+  reader.readAsArrayBuffer(files[0]);
+	//console.log("coucou");
+}
+
+
+</script>
+
+
