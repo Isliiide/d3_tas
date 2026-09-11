@@ -15,4 +15,6 @@ known problems :
 - the function RenderHUDText has no visible effect in game, investigate.
 - the case of recording and playing back at the same time was not handle (it writes/reads the same .sgc file)
 - convenient editing of .sgc file should be made possible (in game? html editor?)
-- ((trying to play the game frame by frame reveals that GameLoop only deals with rendering, and even if it is suspended the game engine continues normally)) suspicion 
+- ((trying to play the game frame by frame reveals that GameLoop only deals with rendering, and even if it is suspended the game engine continues normally)) suspicion
+
+sgc files should be in the game directory, but this ends up being Appdata/Roaming/Outrage Entertainment/Descent3. The sgc file used by the game then needs to be named log_shrunk.sgc
