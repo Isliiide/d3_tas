@@ -1,9 +1,11 @@
 # d3_tas
 developping TAS tools from DescentDevelopers/Descent3
 
-As of now (commit 53fb079) (and next commit is this readme.md), 
+As of now (commit 7681b53) (and next commit is this readme.md), 
 it's possible to press F9 to start recording inputs in game, F9 again to stop, then F10 to play back the recorded inputs
 It works because F9 and F10 handling has been modified in GameLoop.cpp, and Controls.cpp got updated with functions, to rec/play inputs to/from memory, as well as to/from local files. Format used was first .txt, then a custom binary format .sgc (for shrunk game controls). These can be modified with HexEdit.
+
+Stop motion and slow motion is also possible. Pressing K will cycle through normal speed, speed/2, speed/4 and speed/6. Although the playing is very chopping and this doesn't really gives an advantage. Pressing J will enter step_by_step mode, so the game logic will freeze, and then pressing K will allow a single step. Press J again to escape this mode.
 
 known problems :
 
@@ -16,5 +18,8 @@ known problems :
 - the case of recording and playing back at the same time was not handle (it writes/reads the same .sgc file)
 - convenient editing of .sgc file should be made possible (in game? html editor?)
 - ((trying to play the game frame by frame reveals that GameLoop only deals with rendering, and even if it is suspended the game engine continues normally)) suspicion
+- ((confusion between RealTimePhysics, RealTimePerformance, RealTimeProfiling ??))
+- the slown down playing is really choppy, and should be achieved a different way, by hack real time physics instead
+- even with rtp disabled, desync issues keep happening.
 
 sgc files should be in the game directory, but this ends up being Appdata/Roaming/Outrage Entertainment/Descent3. The sgc file used by the game then needs to be named log_shrunk.sgc
