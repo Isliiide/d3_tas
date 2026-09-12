@@ -870,24 +870,32 @@
 extern bool Display_renderer_stats;
 
 //islide
+//----------------------------
 bool step_by_step = false;
 bool one_more_step = false;
+int skip_loops = 0;  //counter, 
+int skip_factor = 0;  // if skip_factor = 4, skip_loops will count 1.2.3 and only play 1 game frame out of 4
+int count_gameFrame = 0;  // this counter takes only physics update in account TODO reset when restarting a level
+//----------------------
 
 // Current zoom factor (this is the tan of 29.25, which is half our FOV of 58.5)
 float Render_FOV = Render_FOV_setting;
 float Render_zoom = D3_DEFAULT_ZOOM;
 
 // How long (in seconds) the last frame took
+//islide : goes with calcFrameTime, initFrametime
+// calcFrameTime is called every GameFrame() loop
 float Frametime = .1f;
 
 // How long (in seconds) since the game started
+//islide : will be sum of Frametime
 float Gametime;
 
 int Timedemo_frame = -1;
 
 // How many frames have been renered.
 // NOTE: this is a count of 3d frames, not game frames
-int FrameCount = 0;
+int FrameCount = 0; // for GameRenderFrame()
 
 bool HUD_disabled = 0;
 #ifdef _DEBUG
@@ -907,8 +915,8 @@ int Clear_screen = 0;
 //	determines if game is paused.
 bool Game_paused = false;
 
-// Used for limiting the framerate
-int Min_allowed_frametime = 0;
+// Used for limiting the framerate // <------- islide : I should have seen this sooner
+int Min_allowed_frametime = 0; //seems to yield no effect though :( maybe because I disabled rtp
 
 // determines if we're rendering the main view
 bool Rendering_main_view = false;
@@ -1121,7 +1129,7 @@ void ProcessButtons() {
   // this shouldn't be called in ReadPlayerControls since the player is DEAD!
   if (Players[Player_num].flags & PLAYER_FLAGS_DEAD) {
     int x, y;
-    PollControls();
+    PollControls(); // islide : PollControls is not implemented apparently
     if (Controller->get_joy_raw_values(&x, &y) || Controller->get_mouse_raw_values(&x, &y)) {
       // death.
       LOG_DEBUG << "here?";
@@ -1260,24 +1268,34 @@ void ProcessNormalKey(int key) {
     break;
 
     case KEY_F9: //islide
-    if (true) {
-        
+            
        toggle_record_inputs();
-        //AddHUDMessage("STEP BY STEP MODE");
-        //step_by_step = !step_by_step;
       return;
-    }
-    break;
+    
 
     case KEY_F10: // islide
-    if (true) {
-       
+   
       toggle_feed_inputs();
-       //AddHUDMessage("STEP+1");
-       //one_more_step = true;
        return;
-    }
-    break;
+    
+
+    case KEY_K: // islide
+	if(step_by_step){
+       		AddHUDMessage("STEP+1");
+       		one_more_step = true;
+	} else {
+		skip_factor = (skip_factor+2)%8; // 0 or 2 or 4 or 6
+		AddHUDMessage("slowing time by %d", skip_factor);
+	}
+       return;
+
+
+    case KEY_J: // islide
+
+        AddHUDMessage("STEP BY STEP MODE");
+        step_by_step = !step_by_step;
+       return;
+
 
   case KEY_SHIFTED + KEY_F8:
     ToggleGameMessageConsole();
@@ -2781,6 +2799,7 @@ void CalcFrameTime(void) {
 }
 
 //	called before first call to StopTime, StartTime or CalcFrameTime
+// islide : called in GameSequencer when a new level is started
 void InitFrameTime(void) {
 
   if (timer_paused) {
@@ -2788,6 +2807,9 @@ void InitFrameTime(void) {
   }
   last_timer = timer_GetMSTime();
   timer_paused = 0;
+
+	//islide
+	count_gameFrame = 0;
 }
 
 // Pauses game
@@ -2896,9 +2918,6 @@ void GameFrame(void) {
 #endif
 
 
-
-  one_more_step = false;
-
   bool is_game_idle = !Descent->active();
 
   if (Tracking_FVI) {
@@ -2907,7 +2926,7 @@ void GameFrame(void) {
 
   // Begin Gameloop stuff
   Physics_normal_counter = 0;
-  Physics_normal_looping_counter = 0;
+  Physics_normal_looping_counter = 0; //islide : unused values ??
   Physics_walking_counter = 0;
   Physics_walking_looping_counter = 0;
   Physics_vis_counter = 0;
@@ -2987,10 +3006,25 @@ void GameFrame(void) {
     }
 
 
-    // AddHUDMessage("frames : %d", Frames_counted); // islide
+	//-------------------------------------
+    AddHUDMessage("GrameFrame : %d", count_gameFrame); //Frames_counted); // islide
     if (step_by_step && !one_more_step) {
-      return; // this only freezes the rendering, the game logic is elsewherre
+	
+	goto skip_physics_and_goto_render;
     }
+	one_more_step = false;
+	
+
+	//islide
+	
+	if(skip_loops < skip_factor){ // put a positive number to slow down the physics by that factor
+		
+		goto skip_physics_and_goto_render;
+	}
+	skip_loops = 0;
+
+	count_gameFrame++;
+	//-------------------------------------
 
     // Global AI Frame Stuff  -- must be before ObjMoveAll
     RTP_tSTARTTIME(aiframeall_time, curr_time);
@@ -3077,6 +3111,11 @@ void GameFrame(void) {
 #ifdef USE_RTP
   RTP_GETCLOCK(curr_time); // update the current time, since something has happened since ENDFTIME
 #endif
+
+	//islide
+	skip_physics_and_goto_render:
+	skip_loops++;
+
 
   if (!is_game_idle) {
     RTP_tSTARTTIME(renderframe_time, curr_time);
