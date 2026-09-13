@@ -875,7 +875,11 @@ bool step_by_step = false;
 bool one_more_step = false;
 int skip_loops = 0;  //counter, 
 int skip_factor = 0;  // if skip_factor = 4, skip_loops will count 1.2.3 and only play 1 game frame out of 4
+
 int count_gameFrame = 0;  // this counter takes only physics update in account TODO reset when restarting a level
+int count_gameFrame_substep = 0;
+
+int slomo_factor = 1; // islide better than skip_factor, this one slows down all of the physics computation
 //----------------------
 
 // Current zoom factor (this is the tan of 29.25, which is half our FOV of 58.5)
@@ -885,7 +889,7 @@ float Render_zoom = D3_DEFAULT_ZOOM;
 // How long (in seconds) the last frame took
 //islide : goes with calcFrameTime, initFrametime
 // calcFrameTime is called every GameFrame() loop
-float Frametime = .1f;
+float Frametime = 0.1f; // default 0.1f, islide why?
 
 // How long (in seconds) since the game started
 //islide : will be sum of Frametime
@@ -916,7 +920,7 @@ int Clear_screen = 0;
 bool Game_paused = false;
 
 // Used for limiting the framerate // <------- islide : I should have seen this sooner
-int Min_allowed_frametime = 0; //seems to yield no effect though :( maybe because I disabled rtp
+int Min_allowed_frametime = 0; //seems to yield no effect though (with or without rtp)
 
 // determines if we're rendering the main view
 bool Rendering_main_view = false;
@@ -1284,8 +1288,16 @@ void ProcessNormalKey(int key) {
        		AddHUDMessage("STEP+1");
        		one_more_step = true;
 	} else {
-		skip_factor = (skip_factor+2)%8; // 0 or 2 or 4 or 6
-		AddHUDMessage("slowing time by %d", skip_factor);
+		//skip_factor = (skip_factor+2)%8; // 0 or 2 or 4 or 6
+		slomo_factor = slomo_factor*2; // 1 or 2 or 4 or 8
+		
+		if(slomo_factor == 16 ){
+			slomo_factor = 1;
+			
+		}
+
+		//AddHUDMessage("slowing time by %d", skip_factor);
+		AddHUDMessage("slowing time by %d", slomo_factor);
 	}
        return;
 
@@ -2780,7 +2792,10 @@ void CalcFrameTime(void) {
 
   current_timer = timer_GetMSTime();
   if (current_timer >= last_timer) {
-    Frametime = static_cast<float>(current_timer - last_timer) / 1000.0f;
+
+	
+    Frametime = static_cast<float>(current_timer - last_timer) / (1000.0f * slomo_factor);  // / 1000.0f;  // <---- ? islide
+
   } else {
     Frametime = 0.0f;
   }
@@ -2810,6 +2825,7 @@ void InitFrameTime(void) {
 
 	//islide
 	count_gameFrame = 0;
+	count_gameFrame_substep = 0;
 }
 
 // Pauses game
@@ -3007,7 +3023,9 @@ void GameFrame(void) {
 
 
 	//-------------------------------------
-    AddHUDMessage("GrameFrame : %d", count_gameFrame); //Frames_counted); // islide
+    //AddHUDMessage("GrameFrame : %d + %d/%d", count_gameFrame, (count_gameFrame_substep+1), slomo_factor); //Frames_counted); // islide
+	AddHUDMessage("GrameFrame : %d + %d / 8", count_gameFrame, count_gameFrame_substep); //Frames_counted); // islide
+
     if (step_by_step && !one_more_step) {
 	
 	goto skip_physics_and_goto_render;
@@ -3023,7 +3041,18 @@ void GameFrame(void) {
 	}
 	skip_loops = 0;
 
-	count_gameFrame++;
+	//count_gameFrame_substep++;
+	//if(count_gameFrame_substep <= slomo_factor){
+	//	count_gameFrame_substep = 0;
+	//	count_gameFrame++;
+	//}
+
+	count_gameFrame_substep += 8/slomo_factor;
+	if(count_gameFrame_substep >= 8){
+		count_gameFrame++;
+		count_gameFrame_substep = count_gameFrame_substep - 8;
+	}
+
 	//-------------------------------------
 
     // Global AI Frame Stuff  -- must be before ObjMoveAll
@@ -3135,13 +3164,15 @@ void GameFrame(void) {
     // float start_delay = timer_GetTime();
     // Slow down the game if the user asked us to
 
-    int64_t current_timer;
+    int64_t current_timer; // islide not to be confused with rtp curr_time
     uint32_t sleeptime;
     current_timer = timer_GetMSTime();
     if ((current_timer - last_timer) < Min_allowed_frametime) {
       sleeptime = (uint32_t)Min_allowed_frametime - (current_timer - last_timer);
-      D3::ChronoTimer::SleepMS(sleeptime);
+      D3::ChronoTimer::SleepMS(sleeptime); //islide i don't get why we don't enter this if when I increase Min_allowed_frametime
+	
     }
+	//D3::ChronoTimer::SleepMS(2000); // islide it works, but physics stay on real time (only rendering is affected)
 
     static int graph_id = -2;
     if (graph_id == -2) {
