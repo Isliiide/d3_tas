@@ -7,18 +7,26 @@ background: #aaa;
 .sgc_frame {
   font-family: consolas;
   display: grid;
-  grid-template-columns: repeat(16,80px);
+  grid-template-columns: repeat(8,120px) 30px 120px 30px 120px 30px 30px 120px ;
 }
 
 .clk {
 
-	background: pink;
+	background: #d9ff95;
 }
  
 
-  background: #744b3f;
-  }
- 
+.zero_val{
+	
+	background: #333;
+}
+
+span {
+
+	color: black;
+	background: #76bd7e;
+	padding-left: 10px;
+}
 
  
 
@@ -74,6 +82,16 @@ function dec_to_bin(dec){
 
 var context = {};
 
+function encapsulated_span(txt){
+
+	var c = "";
+	if(parseFloat(txt) == 0){
+		c = "class='zero_val'";
+	}
+
+	return "<span "+c+">"+ txt + "</span>";
+}
+
 function load_file(files){
 
 	const reader = new FileReader();
@@ -93,17 +111,41 @@ function load_file(files){
 
 	const data_view = new DataView(event.target.result);
 	
-	for(i=0; i< data_view.byteLength; i+=9){
+	for(i=0; i< data_view.byteLength; i+=64){
+		var j = 4;
+		var LE = true;
 		var div = document.createElement("div");
 		div.setAttribute("class", "sgc_frame");
-		div.innerHTML += "<span class='clk'>"+ (data_view.getUint8(i+0) + data_view.getUint8(i+1)*256) +"</span>";
-		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+2))+"</span>";
-		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+3))+"</span>";
-		div.innerHTML += "<span>"+ data_view.getUint8(i+4)+"</span>";
-		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+5))+"</span>";
-		div.innerHTML += "<span>"+ data_view.getUint8(i+6)+"</span>";
-		div.innerHTML += "<span>"+ data_view.getUint8(i+7)+"</span>";
-		div.innerHTML += "<span>"+ dec_to_bin(data_view.getUint8(i+8))+"</span>";
+		var str = "";
+		//str += "<span class='tag'>"+ 				data_view.getUint32(i+j, LE) + "</span>"; j+=4;
+		str += "<span class='clk'>"+ 				data_view.getUint32(i+j, LE) +"</span>"; j+=4;
+
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4;
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4;
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4;
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4; 
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4;
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4;
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4;
+
+		//str += "<span>"+ 					data_view.getUint8(i+j, LE)+"</span>"; j++;
+		//str += "<span>"+ 					data_view.getUint8(i+j, LE)+"</span>"; j++;
+
+		str += encapsulated_span(data_view.getUint32(i+j, LE)); j+=4;
+		//str += "<span>"+ 					data_view.getUint32(i+j, LE)+"</span>"; j+=4;
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8))+"</span>"; j+=4;
+
+		str += encapsulated_span(data_view.getUint32(i+j, LE)); j+=4;
+		//str += "<span>"+ 					data_view.getUint32(i+j, LE)+"</span>"; j+=4;
+		str += encapsulated_span(data_view.getFloat32(i+j, LE).toFixed(8)); j+=4;
+
+		str += encapsulated_span(data_view.getUint32(i+j, LE)); j+=4;
+		str += encapsulated_span(data_view.getUint32(i+j, LE)); j+=4;
+
+		str += encapsulated_span(dec_to_bin(data_view.getUint8(i+j, LE))); j+=4;
+
+		div.innerHTML = str;
+		
 		document.querySelector("#main_div").appendChild(div);
 	}
 	
