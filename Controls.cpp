@@ -460,6 +460,14 @@ static float Control_current_time;
 
 //--------------------------------------------------------------------------------------
 static int counting_calls = 0; //islide
+bool use_diagonal_controls = false;
+
+void toggle_diagonal_controls() {
+
+  use_diagonal_controls = !use_diagonal_controls;
+  return;
+}
+
 std::vector<game_controls*> vec_gc; //islide
 std::vector<shrunk_gc*> vec_sgc; //islide
 
@@ -583,8 +591,58 @@ void delete_vec_sgc(std::vector<shrunk_gc *> *vec_sgc) {
   return;
 }
 
-void shrink_gc(shrunk_gc* sgc_dest, game_controls *gc_src) {
 
+std::ofstream inputs_rec_to;
+bool b_record_inputs = false;
+bool b_record_inputs_old = false;
+void toggle_record_inputs() { b_record_inputs = !b_record_inputs; }
+
+std::ifstream inputs_feed_from;
+bool b_feed_inputs = false;
+bool b_feed_inputs_old = false;
+void toggle_feed_inputs() { b_feed_inputs = !b_feed_inputs; }
+
+
+void write_gc_to_file(game_controls *controls) {
+
+    //inputs_rec_to is global
+
+    int tag = 0xFFAFAFAF;
+     int clk = counting_calls; // TODO get() count_gameFrame; // 16b enough for ~20min
+
+     inputs_rec_to.write((const char *)&tag, 4);
+     inputs_rec_to.write((const char *)&clk, 4);
+     inputs_rec_to.write((const char *)&(controls->pitch_thrust), 4); 
+     inputs_rec_to.write((const char *)&(controls->heading_thrust), 4); 
+     inputs_rec_to.write((const char *)&(controls->bank_thrust), 4); 
+     inputs_rec_to.write((const char *)&(controls->vertical_thrust), 4); 
+     inputs_rec_to.write((const char *)&(controls->sideways_thrust), 4); 
+     inputs_rec_to.write((const char *)&(controls->forward_thrust), 4); 
+     inputs_rec_to.write((const char *)&(controls->afterburn_thrust), 4); 
+     //inputs_rec_to.write((const char *)& (controls->toggle_slide), 1); 
+     //inputs_rec_to.write((const char *)& (controls->toggle_bank), 1); 
+
+     inputs_rec_to.write((const char *)&(controls->fire_primary_down_count), 4); 
+     //inputs_rec_to.write((const char *)&(controls->fire_primary_down_state), 1); 
+     inputs_rec_to.write((const char *)&(controls->fire_primary_down_time), 4); 
+
+     inputs_rec_to.write((const char *)&(controls->fire_secondary_down_count), 4);
+     //inputs_rec_to.write((const char *)&(controls->fire_secondary_down_state), 1);
+     inputs_rec_to.write((const char *)&(controls->fire_secondary_down_time), 4); 
+
+     inputs_rec_to.write((const char *)&(controls->fire_flare_down_count), 4); 
+     inputs_rec_to.write((const char *)&(controls->rearview_down_count), 4); 
+     //inputs_rec_to.write((const char *)&(controls->rearview_down_state), 1); 
+
+     int bools = 0;
+     bools += controls->toggle_slide << 7;
+     bools += controls->toggle_bank << 6;
+     bools += controls->fire_primary_down_state << 5;
+     bools += controls->fire_secondary_down_state << 4;
+     bools += controls->rearview_down_state << 3;
+
+     inputs_rec_to.write((const char *)&(bools), 4); 
+  /*
   uint8_t buffer;
 
   // xx yy zz __      with +z being fwd
@@ -634,15 +692,54 @@ void shrink_gc(shrunk_gc* sgc_dest, game_controls *gc_src) {
 
   // misc
   sgc_dest->misc += (gc_src->fire_flare_down_count << 7);
-
+  */
   return;
 }
 
-void unshrink_gc(game_controls *gc_dest, shrunk_gc *sgc_src) {
+void read_gc_from_file(game_controls *controls) {
 
+  // inputs_feed_from is global
+
+  
+  char buf_tag[4] = {}; // int32
+  char buf_clk[4] = {}; // int32
+
+  inputs_feed_from.read(buf_tag, 4); // clock check ?
+  inputs_feed_from.read(buf_clk, 4); // 0xFFAFAFAF
+  inputs_feed_from.read((char *)&(controls->pitch_thrust), 4);
+  inputs_feed_from.read((char *)&(controls->heading_thrust), 4);
+  inputs_feed_from.read((char *)&(controls->bank_thrust), 4);
+  inputs_feed_from.read((char *)&(controls->vertical_thrust), 4);
+  inputs_feed_from.read((char *)&(controls->sideways_thrust), 4);
+  inputs_feed_from.read((char *)&(controls->forward_thrust), 4);
+  inputs_feed_from.read((char *)&(controls->afterburn_thrust), 4);
+
+  // inputs_rec_to.write((const char *)& (controls->toggle_slide), 1);
+  // inputs_rec_to.write((const char *)& (controls->toggle_bank), 1);
+
+  inputs_feed_from.read((char *)&(controls->fire_primary_down_count), 4);
+  // inputs_rec_to.write((const char *)&(controls->fire_primary_down_state), 1);
+  inputs_feed_from.read((char *)&(controls->fire_primary_down_time), 4);
+
+  inputs_feed_from.read((char *)&(controls->fire_secondary_down_count), 4);
+  // inputs_rec_to.write((const char *)&(controls->fire_secondary_down_state), 1);
+  inputs_feed_from.read((char *)&(controls->fire_secondary_down_time), 4);
+
+  inputs_feed_from.read((char *)&(controls->fire_flare_down_count), 4);
+  inputs_feed_from.read((char *)&(controls->rearview_down_count), 4);
+  // inputs_rec_to.write((const char *)&(controls->rearview_down_state), 1);
+
+  int bools = 0;
+  inputs_feed_from.read((char *)&(bools), 4);
+  controls->toggle_slide = (bools >> 7) & 0x01;
+  controls->toggle_bank = (bools >> 6) & 0x01;
+  controls->fire_primary_down_state = (bools >> 5) & 0x01;
+  controls->fire_secondary_down_state = (bools >> 4) & 0x01;
+  controls->rearview_down_state = (bools >> 3) & 0x01;
+
+  /*
   memset(gc_dest, 0, sizeof(game_controls));
-
-
+  
   // xx yy zz __      with +z being fwd
   // 00 -> 0
   // 10 -> -1
@@ -731,60 +828,11 @@ void unshrink_gc(game_controls *gc_dest, shrunk_gc *sgc_src) {
   
   //misc
   gc_dest->fire_flare_down_count = (sgc_src->misc >> 7) & 0x01; //flare
-
+  */
   return;
 }
-      /*
 
-clk	[8]
 
-x	[2]  -1 0 +1
-y	[2]
-z	[2]
-x_rot	[2]
-y_rot	[2]
-z_rot	[2]
-  =[16]
-ab	[16]	float
-
-atk1	[2]
-atk2	[2]
-  [2]
-  [2]
-  =[16]
-  [16]	float
-  [16]	float
-
-flare	[1]
-cy1	[1]
-cy2	[1]
-cy_item	[1]
-use_item[1]
-
-load	[1]
-save	[1]
-demo	[1]
-  =[8]
-
-=[88] ~ [96] 12oc
-
-*/
-
-std::ofstream inputs_rec_to;
-bool b_record_inputs = false;
-bool b_record_inputs_old = false;
-void toggle_record_inputs() { 
-
-  b_record_inputs = !b_record_inputs;
-}
-
-std::ifstream inputs_feed_from;
-bool b_feed_inputs = false;
-bool b_feed_inputs_old = false;
-void toggle_feed_inputs() { 
-
-  b_feed_inputs = !b_feed_inputs;
-}
 
 
 //----------------------------------------------------------------
@@ -1068,6 +1116,7 @@ void ReadPlayerControls(
   DoMovement(controls); // controls for moving the object
 
 
+  //-----------------------------------------------------
   // islide : setup a vector of game_controls
   int do_hack_controls = 0;
   if (do_hack_controls) {
@@ -1085,7 +1134,7 @@ void ReadPlayerControls(
     if (counting_calls < 1000) {
 
       //memcpy(controls, vec_gc.at(counting_calls % vec_gc.size()), sizeof(game_controls));
-      unshrink_gc(controls, vec_sgc.at(counting_calls % vec_sgc.size()));
+      //unshrink_gc(controls, vec_sgc.at(counting_calls % vec_sgc.size()));
     }
 
     if (counting_calls == 1000) { //TODO find proper place to trigger this
@@ -1095,43 +1144,23 @@ void ReadPlayerControls(
     }
   }
 
+  //-----------------------------------------------------
   if (b_feed_inputs) {
-
-    shrunk_gc feed_sgc;
-    //std::ifstream feed_shrunk;
 
     if (!b_feed_inputs_old && b_feed_inputs) {
     
       AddHUDMessage("starting feeding recorded inputs");
-     //inputs_feed_from.open("./feed_shrunk.sgc", std::ios::binary);
       inputs_feed_from.open("./log_shrunk.sgc", std::ios::binary);
     }
 
-    char buf[100];
-    snprintf(buf, sizeof(buf), "feeding inputs");
-    RenderHUDText(0x000000ff, HUD_ALPHA, 1, 20, 20, buf);
-    
-     //inputs_feed_from.seekg(counting_calls * 9, inputs_feed_from.beg);
-    
-    
-    char buf_clk[2] = {};
-    inputs_feed_from.read(buf_clk, 2); // clock check ?
-    inputs_feed_from.read((char *)&(feed_sgc.xyz), 1);
-    inputs_feed_from.read((char *)&(feed_sgc.xyz_rot), 1);
-    inputs_feed_from.read((char *)&(feed_sgc.ab), 1);
-    inputs_feed_from.read((char *)&(feed_sgc.atk), 1);
-    inputs_feed_from.read((char *)&(feed_sgc.atk1f), 1);
-    inputs_feed_from.read((char *)&(feed_sgc.atk2f), 1);
-    inputs_feed_from.read((char *)&(feed_sgc.misc), 1);
+    read_gc_from_file(controls);
 
     if (inputs_feed_from.eof()) { 
-      inputs_feed_from.close(); // have to close it since it's recreated each call
+      inputs_feed_from.close();
       b_feed_inputs = false;
       AddHUDMessage("feeding inputs done");
-    }
-
-    unshrink_gc(controls, &feed_sgc);
-    
+      memcpy(controls, 0, sizeof(game_controls)); // trying to prevent a crash maybe due to faulty gc state
+    }    
   }
 
   if (b_feed_inputs_old && !b_feed_inputs) {
@@ -1140,6 +1169,7 @@ void ReadPlayerControls(
     AddHUDMessage("feeding inputs done");
   }
   
+  //-----------------------------------------------------
    // islide : setup log_input file
    int fill_log_inputs = 0;
    if(fill_log_inputs){
@@ -1190,67 +1220,79 @@ void ReadPlayerControls(
 
      if (!b_record_inputs_old && b_record_inputs) {
      
-        // reset file
+       // reset file
        AddHUDMessage("starting new record of inputs");
-        inputs_rec_to.open("./log_shrunk.sgc", std::ios::binary);
+       inputs_rec_to.open("./log_shrunk.sgc", std::ios::binary);
        const char buf[1] = {0xF9};
        inputs_rec_to.write(buf, 0);
        inputs_rec_to.close();
-       inputs_rec_to.open("./log_shrunk.sgc", std::ios::binary | std::ios::app);
-      
+       inputs_rec_to.open("./log_shrunk.sgc", std::ios::binary | std::ios::app); 
      }
 
-     char buf[100];
-     snprintf(buf, sizeof(buf), "recording inputs");
-     RenderHUDText(0x000000ff, HUD_ALPHA, 1, 20, 20, buf);
-
-     //std::ofstream log_shrunk;
-
-     // clearing the log upon starting a level
-     if (counting_calls == 0) {
-
-       //log_shrunk.open("./log_shrunk.sgc", std::ios::binary);
-       const char buf[1] = {0xF9};
-       //log_shrunk.write(buf, 0);
-       //log_shrunk.close();
-     }
-
-     shrunk_gc sgc;
-     shrink_gc(&sgc, controls);
-
-     //log_shrunk.open("./log_shrunk.sgc", std::ios::binary | std::ios::app); // AppData\Roaming\Outrage Entertainment\Descent 3
-
-     
-     // the thrust are just -1 0 or +1, but I guss it's for keyboard, and joypad will have a continuum of values
-     uint16_t clk = counting_calls; // enough for ~20min
-     inputs_rec_to.write((const char *)&clk, 2);
-     //log_shrunk << timer_GetTime() << "\t"; // Control_current_time seems to be constant , around 2s
-     // timer_GetTime does what it says - but it's persistent accross levels and reloading
-     inputs_rec_to.write((const char *)&(sgc.xyz), 1);
-     inputs_rec_to.write((const char *)&(sgc.xyz_rot), 1);
-     inputs_rec_to.write((const char *)&(sgc.ab), 1);
-     inputs_rec_to.write((const char *)&(sgc.atk), 1);
-     inputs_rec_to.write((const char *)&(sgc.atk1f), 1);
-     inputs_rec_to.write((const char *)&(sgc.atk2f), 1);
-     inputs_rec_to.write((const char *)&(sgc.misc), 1);
-     
-     
-     //log_shrunk.close(); // i dont like to open/close on each frame, TODO only 1 open/close
+     write_gc_to_file(controls);
    }
 
-    if (b_record_inputs_old && !b_record_inputs) {
+   if (b_record_inputs_old && !b_record_inputs) {
 
      // close file
      inputs_rec_to.close();
      AddHUDMessage("record of inputs done.");
    }
 
-    b_feed_inputs_old = b_feed_inputs;
-    b_record_inputs_old = b_record_inputs;
-   counting_calls++;
-   
+   //-----------------------------------------------------
+   //bool use_diagonal_controls = false; // will be global
+   if (use_diagonal_controls) {
 
-  
+     if (controls->sideways_thrust < 0) {
+       controls->bank_thrust = 1;
+       controls->sideways_thrust = 0;
+     }
+     if (controls->sideways_thrust > 0) {
+       controls->bank_thrust = -1;
+       controls->sideways_thrust = 0;
+     }
+
+     if (controls->forward_thrust > 0) {
+       controls->sideways_thrust = 1;
+       controls->vertical_thrust = 1;
+       controls->forward_thrust = 1;
+     }
+
+     if (controls->forward_thrust < 0) {
+       controls->sideways_thrust = -1;
+       controls->vertical_thrust = -1;
+       controls->forward_thrust = -1;
+     }
+
+     bool rot_done = false;
+     if (!rot_done && controls->heading_thrust < 0) {
+       controls->heading_thrust = -1;
+       controls->pitch_thrust = -1;
+       rot_done = true;
+     }
+     if (!rot_done && controls->heading_thrust > 0) {
+       controls->heading_thrust = 1;
+       controls->pitch_thrust = 1;
+       rot_done = true;
+     }
+     if (!rot_done && controls->pitch_thrust < 0) {
+       controls->heading_thrust = 1;
+       controls->pitch_thrust = -1;
+       rot_done = true;
+     }
+     if (!rot_done && controls->pitch_thrust > 0) {
+       controls->heading_thrust = -1;
+       controls->pitch_thrust = 1;
+       rot_done = true;
+     }
+   }
+   //-----------------------------------------------------
+
+   // islide aging
+   b_feed_inputs_old = b_feed_inputs;
+   b_record_inputs_old = b_record_inputs;
+   counting_calls++;
+
 
 
   //	only read at the specified rate to keep things consistant. manager control system timer

@@ -880,6 +880,11 @@ int count_gameFrame = 0;  // this counter takes only physics update in account T
 int count_gameFrame_substep = 0;
 
 int slomo_factor = 1; // islide better than skip_factor, this one slows down all of the physics computation
+
+int get_slomo_factor() { // to communicate with sdlsounds
+  return slomo_factor; 
+} 
+
 //----------------------
 
 // Current zoom factor (this is the tan of 29.25, which is half our FOV of 58.5)
@@ -1281,6 +1286,13 @@ void ProcessNormalKey(int key) {
    
       toggle_feed_inputs();
        return;
+
+
+    case KEY_L: // islide
+
+      AddHUDMessage("toggling diagonal controls");
+      toggle_diagonal_controls();
+      return;
     
 
     case KEY_K: // islide
@@ -1295,6 +1307,8 @@ void ProcessNormalKey(int key) {
 			slomo_factor = 1;
 			
 		}
+
+                //Sound_system.ChangeSampleRate(22050/slomo_factor); //as of now, this causes crashes
 
 		//AddHUDMessage("slowing time by %d", skip_factor);
 		AddHUDMessage("slowing time by %d", slomo_factor);

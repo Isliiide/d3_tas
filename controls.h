@@ -213,6 +213,7 @@ const int ctfFORWARD_THRUSTAXIS = 0, ctfFORWARD_THRUSTKEY = 1, ctfREVERSE_THRUST
           ctfAUDIOTAUNT1_BTN = 66, ctfAUDIOTAUNT2_KEY = 67, ctfAUDIOTAUNT2_BTN = 68, ctfAUDIOTAUNT3_KEY = 69,
           ctfAUDIOTAUNT3_BTN = 70, ctfAUDIOTAUNT4_KEY = 71, ctfAUDIOTAUNT4_BTN = 72;
 
+// islide : sizeof = 68 (empyrically) ?? I count 56
 struct game_controls {
   //	movement values
   //	these values are from -1.0 to 1.0.-
@@ -245,6 +246,9 @@ struct game_controls {
 
 // islide
 struct shrunk_gc {
+
+  char making_space_for_gc[68]; // todo, remove once properly compressed
+
   //uint8_t clk = 0; //will be external to struct
   uint8_t xyz = 0; // xx yy zz __
   uint8_t xyz_rot = 0; // xx yy zz __
@@ -254,6 +258,9 @@ struct shrunk_gc {
   uint8_t atk2f = 0;
   uint8_t misc = 0; // flare, cy1, cy2, cy_item, use_item, load, save, demo
 };
+
+//islide
+void toggle_diagonal_controls();
 
 //	Controller object.
 extern gameController *Controller;
@@ -308,11 +315,8 @@ void fill_vec_sgc(std::vector<shrunk_gc *> *vec_sgc);
 // used to free memory of the shrunk_gc instances
 void delete_vec_sgc(std::vector<shrunk_gc *> *vec_sgc);
 
-// converts a game_controls to shrunk_gc, which holds the same info in compressed format
-void shrink_gc(shrunk_gc *sgc_dest, game_controls *gc_src);
-
-// retrieves a game_controls from shrunk_gc, which holds the same info
-void unshrink_gc(game_controls *gc_dest, shrunk_gc *sgc_src);
+void write_gc_to_file(game_controls *controls);
+void read_gc_from_file(game_controls *controls);
 
 // interface with gameloop.cpp
 void toggle_record_inputs();
