@@ -346,7 +346,8 @@
  * added room (fog and wind) changing functions
  *
  * 299   1/15/99 7:52p Chris
- * Updated ObjSetPos() to include a f_update_attach_children flag
+ * Updated ObjSetPos() to include a f_update_
+ _children flag
  *
  * 298   1/15/99 7:16p Kevin
  * Added GameGauge Configuration & code
@@ -1286,6 +1287,13 @@ void ProcessNormalKey(int key) {
    
       toggle_feed_inputs();
        return;
+       
+    case KEY_M: //to playback a demo, and then exit the playback and be in tha game engine in the same state
+      if (Demo_flags == DF_PLAYBACK) {
+        Demo_flags = DF_NONE;
+      }
+        
+      return;
 
 
     case KEY_L: // islide
@@ -1478,8 +1486,14 @@ void ProcessNormalKey(int key) {
     case KEY_DOWN:
       Game_paused = true;
       Demo_paused = true;
+      demo_jump_to_frame(0);
       break;
     case KEY_RIGHT:
+      demo_jump_to_frame(1);
+      Demo_do_one_frame = true;
+      break;
+    case KEY_LEFT:
+      demo_jump_to_frame(-1);
       Demo_do_one_frame = true;
       break;
     case KEY_CTRLED + KEY_LEFT: {
@@ -3015,17 +3029,7 @@ void GameFrame(void) {
 #endif
 
   if ((!Game_paused) || (Demo_do_one_frame)) {
-    // if we are recording a demo, all moved objects will be written
-    if (!Skip_render_game_frame) {
-      DemoWriteChangedObjects();
-    }
-    // Demo Frame (do this first so all subsequent demo items are marked for this frame)
-    if (!Skip_render_game_frame) {
-      DemoStartNewFrame();
-    }
-    if (Demo_flags == DF_PLAYBACK) {
-      DemoFrame();
-    }
+
 
     if (!is_game_idle) {
       // Get and process keys
@@ -3037,8 +3041,11 @@ void GameFrame(void) {
 
 
 	//-------------------------------------
-    //AddHUDMessage("GrameFrame : %d + %d/%d", count_gameFrame, (count_gameFrame_substep+1), slomo_factor); //Frames_counted); // islide
-	AddHUDMessage("GrameFrame : %d + %d / 8", count_gameFrame, count_gameFrame_substep); //Frames_counted); // islide
+    if (Demo_flags != DF_PLAYBACK) {
+      // AddHUDMessage("GameFrame : %d + %d/%d", count_gameFrame, (count_gameFrame_substep+1), slomo_factor);
+      // //Frames_counted); // islide
+      AddHUDMessage("GameFrame : %d + %d / 8", count_gameFrame, count_gameFrame_substep); // Frames_counted); // islide
+    }
 
     if (step_by_step && !one_more_step) {
 	
@@ -3047,27 +3054,34 @@ void GameFrame(void) {
 	one_more_step = false;
 	
 
-	//islide
+    //islide
 	
-	if(skip_loops < skip_factor){ // put a positive number to slow down the physics by that factor
+    if(skip_loops < skip_factor){ // put a positive number to slow down the physics by that factor
 		
-		goto skip_physics_and_goto_render;
-	}
-	skip_loops = 0;
+	    goto skip_physics_and_goto_render;
+    }
+    skip_loops = 0;
 
-	//count_gameFrame_substep++;
-	//if(count_gameFrame_substep <= slomo_factor){
-	//	count_gameFrame_substep = 0;
-	//	count_gameFrame++;
-	//}
+    count_gameFrame_substep += 8/slomo_factor;
+    if(count_gameFrame_substep >= 8){
+	    count_gameFrame++;
+	    count_gameFrame_substep = count_gameFrame_substep - 8;
+    }
 
-	count_gameFrame_substep += 8/slomo_factor;
-	if(count_gameFrame_substep >= 8){
-		count_gameFrame++;
-		count_gameFrame_substep = count_gameFrame_substep - 8;
-	}
+    //-------------------------------------
 
-	//-------------------------------------
+
+    // if we are recording a demo, all moved objects will be written
+    if (!Skip_render_game_frame) {
+      DemoWriteChangedObjects();
+    }
+    // Demo Frame (do this first so all subsequent demo items are marked for this frame)
+    if (!Skip_render_game_frame) {
+      DemoStartNewFrame();
+    }
+    if (Demo_flags == DF_PLAYBACK) {
+      DemoFrame();
+    }
 
     // Global AI Frame Stuff  -- must be before ObjMoveAll
     RTP_tSTARTTIME(aiframeall_time, curr_time);
