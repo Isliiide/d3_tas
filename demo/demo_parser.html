@@ -1,0 +1,1651 @@
+<script>
+  /*
+written by Islide @ decent 3 speedrun.com
+
+known issues :
+- I'm filtering "GrameFrame" hud messages, which should be corrected to "GameFrame" once the game is updated too
+- The build of the game I had was writing opcode 0x13 instead of 0x14, hence creating faulty demo files, but the problem isn't due to this parser 
+(problem on lv7 demo files, where this opcode is often used)
+- the method for skipping header bytes and going straight to the recorded demo data may fail on levels not from the original d3 campaign (if the level has a name different than "level2" per say)
+
+the parser hasn't been tested in multiplayer, so there's no garantee it works (especially the assumption that player = obj # 0, which surely only works in single player mode)
+
+the function DemoWriteAttachObj was writing the wrong opcode (0x13 instead of 0x14), causing trouble with demo playback
+
+*/
+</script>
+
+<style>
+
+body {
+background: #999;
+ font-size: 14px;
+ font-family: consolas;
+}
+  
+.data_div  {
+ background: #ddd;
+	
+	  font-weight: normal;
+	 border : 1px solid black;
+	 margin-top: 10px;
+	 padding: 10px;
+	display: none;
+  	grid-template-columns: repeat(4, 140px 200px);
+ }
+ 
+ .data_label {
+
+	
+
+}
+
+
+
+.data_val {
+
+	color:blue;
+}
+
+.data_title {
+background: #e8e8ab;
+  padding: 4px;
+}
+
+.data_title[new_frame]{
+
+	background : pink;
+	border: 1px solid black;
+	margin: 6px;
+}
+
+.data_title[read_obj]{
+
+	background : #b0d7c3;
+	--border: 1px solid black;
+	--margin: 6px;
+}
+
+.data_title[hud_msg]{
+	background: #ff9298;
+}
+
+.data_title[hud_msg] .data_div {
+	display:grid;
+}
+
+.data_title[new_frame]>.data_div {
+
+	display: grid;
+}
+
+.data_title>.data_title:hover>.data_div {
+
+	display: grid;
+}
+
+.data_title>.data_title:hover {
+
+	outline: 2px black solid;
+}
+
+
+#main_div{
+	display:none;
+}
+
+#graph_wrapper{
+
+	display: grid;
+	grid-template-columns: 140px auto;
+}
+
+#graph_titles{
+	display: grid;
+  grid-template-rows: repeat(4, 138px) repeat(4, 25px) 34px  100px  32px repeat(3, 25px) 100px 34px 25px repeat(10, 34px);
+
+}
+
+.graph_title {
+  font-weight: bold;
+  color: #9d9d9d;
+  width: 129px;
+  --position: absolute;
+  margin-top: 0px;
+margin-left: -30px;
+  padding-left: 40px;
+  background: #000;
+padding-top: 4px;
+outline: 1px solid grey;
+}
+
+.graph {
+	--height : 100px;
+	--max-width: 100%;
+	margin-top: 4px;
+}
+
+#graphs {
+  background: #151515;
+width: 100%;
+overflow: scroll;
+}
+
+.graph_change {
+	--max-width: 100%;
+	margin-top: 4px;
+}
+
+.band_item {
+--outline: 1px yellow solid;
+  border-radius: 6px;
+  padding-top: 2px;
+  background: #8f8f8f;
+  color: #fff;
+  padding-bottom: 2px;
+  background: linear-gradient(90deg,rgb(162, 91, 0) 0%, rgb(0, 0, 0) 50%)
+}
+
+/*
+band_item:hover {
+  background: #994f00;
+}
+*/
+
+/*
+.band_item[unfinished]{
+outline: 1px black solid;
+  border-radius: 6px 0px 0px 6px;
+  --padding: 4px;
+  background: linear-gradient(90deg,rgba(204, 204, 204, 1) 0%, rgb(150, 150, 150) 90%, rgb(126, 126, 126) 99%);
+
+}*/
+
+.band {
+	display: block ruby;
+	margin-top: 4px;
+	--margin-left: 6px;
+
+}
+
+#cood {
+
+	position: fixed;
+  background: white;
+top: 0px;
+  left: 300px;
+}
+
+#reticle {
+
+	position: fixed;
+	border-right: 2px dashed white;
+	left: 0px;
+	top: 0px;
+	height: 1000px;
+	width: 10px;
+	 pointer-events: none;
+}
+
+#reticle_y {
+
+	position: fixed;
+	border-bottom: 8px dotted white;
+	left: 0px;
+	top: 0px;
+	height: 50px;
+	width: 14px;
+	 pointer-events: none;
+}
+
+
+
+
+
+
+</style>
+
+
+<body>
+
+<input id="file_loader" type="file" accept=".dem" onchange="load_file(event.target.files)" ></input>
+<div id="reticle"></div>
+<div id="reticle_y"></div>
+<div id="cood"></div>
+<div id="graph_wrapper">
+	<div id="graph_titles"></div>
+	<div id="graphs"></div>
+</div>
+
+</body>
+
+
+<script>
+
+globals = {
+	data_view: null,
+	i: 0,
+	active_div: null,
+	active_div2: null,
+	create_html: false,
+	LE: true,
+	count_newFrame: 0,
+	eof: false,
+};
+
+function dec_to_hex(dec){
+
+	if(dec < 0){
+		return "XX";
+	}
+	if(dec > 255){
+		return "XX";
+	}
+	
+	var hex_lut = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"];
+	var i = dec%16;
+	var j = (dec-i)/16;
+	
+	return hex_lut[j] + hex_lut[i];
+
+}
+
+var context = {};
+
+function load_file(files){
+
+	const reader = new FileReader();
+  reader.addEventListener('loadend', (event) => {
+
+	document.querySelector("#cood").innerHTML = "wait for html to generate";
+	
+	console.log("file_loaded");
+	
+	globals.data_view = new DataView(event.target.result);
+
+	var fsm_osiris = new FSM("4F 53 49 52 49 53");
+	var fsm_level = new FSM("6C 65 76 65 6C");
+	var fsm_a040 = new FSM("A0 40 00 00 90 42");
+
+	function alert_pattern(a){ alert("failed to parse demo file, lacking pattern "+ a);}
+
+	var i_osiris = find_first_match(globals.data_view, 0, globals.data_view.byteLength, fsm_osiris);
+	if(i_osiris == -1){
+		alert_pattern("osiris");
+		return;
+	}
+
+	var i_level = find_first_match(globals.data_view, i_osiris, globals.data_view.byteLength, fsm_level);
+	if(i_level == -1){
+		alert_pattern("level");
+		return;
+	}
+
+	var i_a040 = find_first_match(globals.data_view, i_level, globals.data_view.byteLength, fsm_a040);
+	if(i_a040 == -1){
+		alert_pattern("0x0000000002");
+		return;
+	}
+
+	
+	globals.i = i_a040 ;
+	globals.create_html = false;
+
+	//globals.i = 14294146; ///////////////
+
+	main_div = document.createElement("div");
+	//main_div.setAttribute("class", "data_div");
+	main_div.setAttribute("id", "main_div");
+	document.body.appendChild(main_div);
+
+	globals.active_div = main_div;
+	globals.active_div2 = main_div;
+
+
+	//opcode
+	for(var k=0; k < 1000000; k++){
+		if(0 == read_opcode()){
+			break;
+		}
+		if(globals.eof){
+			break;
+		}
+	}
+	
+	
+	draw_all_graphs();
+
+	document.querySelector("#file_loader").style.setProperty("background", "#cbf");
+
+
+	return;
+	
+
+  });
+
+  reader.readAsArrayBuffer(files[0]);
+}
+
+
+//----------------------------------------------------------------------------------------------
+
+
+function FSM(pattern="", state=0,  result=false) { //finalState=0
+	this.pattern = pattern.split(" ");
+	this.finalState = this.pattern.length; //finalState;
+	this.state = state;
+	this.result = result;
+	this.update = (hex) =>{
+  
+		for(var i=0; i<this.finalState; i++){
+		
+		   if((this.state == i) && hex == this.pattern[i]){
+		   
+				this.state ++;
+				this.result = (this.state == this.finalState);
+				return;
+			}
+		}
+		this.state = 0
+		this.result = false;
+		return;
+	};
+}
+
+
+
+
+function find_first_match(data_view, dv_start, dv_end, fsm){
+
+	first_match_index = -1;
+
+
+	for(var i=dv_start; i<dv_end;  i++){
+	
+		var hex = dec_to_hex(data_view.getUint8(i));
+							
+		if(fsm.result){
+			first_match_index = i;
+			break; 
+		}
+			
+		fsm.update(hex);
+	}
+	
+	console.log("found '"+fsm.pattern.join(" ")+"' at " + first_match_index);
+	return first_match_index;
+}
+
+
+
+function make_label(str){
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_label");
+	sp.innerText = str;
+
+	
+	globals.active_div.appendChild(sp);
+}
+
+function read4(is_float=false){
+
+	if(globals.data_view.byteLength - globals.i < 4){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var val;
+
+	if(is_float){
+		val = globals.data_view.getFloat32(globals.i, globals.LE); 	
+	} else {
+		val = globals.data_view.getUint32(globals.i, globals.LE); 	
+	}
+	globals.i+=4;
+
+	if(!globals.create_html){
+		return val;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = val;
+
+	
+	globals.active_div.appendChild(sp);
+	
+	return val;
+}
+
+function read2(){
+
+	if(globals.data_view.byteLength - globals.i < 2){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var val = globals.data_view.getUint16(globals.i, globals.LE); 
+	globals.i+=2;
+
+
+	if(!globals.create_html){
+		return val;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = val;
+
+	globals.active_div.appendChild(sp);
+	return val;
+}
+
+function read1(){
+
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var val = globals.data_view.getUint8(globals.i); 
+	globals.i+=1;
+
+
+	if(!globals.create_html){
+		return val;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = val;
+
+	globals.active_div.appendChild(sp);
+	return val;
+}
+
+function create_new_box(name, make_active=0){
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var d = document.createElement("div");
+	d.setAttribute("class", "data_div");
+
+	var title = document.createElement("div");
+	title.setAttribute("class", "data_title");
+	title.innerHTML = globals.i + " <b>" + name + "</b>";
+	if(make_active == 2){ title.innerHTML += " ("+ globals.count_newFrame + ")"; }
+	title.appendChild(d);
+	
+	globals.active_div2.appendChild(title);
+
+	if(make_active == 0){
+
+	}
+	if(make_active == 1){
+
+		globals.active_div = d;
+	}
+	if(make_active == 2){
+		
+		globals.active_div = d;
+		globals.active_div2 = title;
+		document.querySelector("#main_div").appendChild(title);
+
+	}
+
+}
+//----------------------------------------------------------------
+
+
+HUDmessages = {};
+HUDmessages_GB = {};
+function DemoReadHudMessage(){
+
+	create_new_box("DemoReadHudMessage", 1);
+	globals.active_div.parentNode.setAttribute("hud_msg", 1);
+
+
+	make_label("color");		read4();
+	make_label("blinking");		read1();
+
+	var buf ="";
+	var char = 0xff;
+	while(char != 0x00 && buf.length < 200){
+
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(char);
+	}
+	make_label("HUDmessage");	
+	
+	if((buf.split("GameFrame")[0].length > 0) && (buf.split("GrameFrame")[0].length > 0)){ // if message doesn't start with "GrameFrame" // yes there's a typo
+
+		if(buf.split("GB:").length != 2){
+			HUDmessages[globals.count_newFrame] = buf;
+		} else {
+			HUDmessages_GB[globals.count_newFrame] = buf;
+
+		}	
+	}
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+
+	globals.active_div.appendChild(sp);
+}
+
+var count_demoReadObj = 0;
+var dic_demoReadObj = {};
+
+player_obj_x = {};
+player_obj_y = {};
+player_obj_z = {};
+player_obj_room = {};
+player_obj_room_old = 0;
+
+player_obj_x_old = 0;
+player_obj_y_old = 0;
+player_obj_z_old = 0;
+player_obj_xyz_delta_old = 0;
+player_obj_xyz_delta = {}
+
+function DemoReadObj(){
+
+	
+	count_demoReadObj++;
+	var gcnf = globals.count_newFrame;
+
+	create_new_box("DemoReadObj", 1);
+	globals.active_div.parentNode.setAttribute("read_obj", 1);
+
+	make_label("obj_num");		var obj_num = read2();
+	
+	if(obj_num == 0){
+
+		make_label("room_num");		player_obj_room_new = read4();
+
+		if(player_obj_room_new != player_obj_room_old){
+			player_obj_room[gcnf] = player_obj_room_new;
+			player_obj_room_old = player_obj_room_new;
+		}
+		make_label("pos_x");		player_obj_x[gcnf] = read4(true);
+		make_label("pos_y");		player_obj_y[gcnf] = read4(true);
+		make_label("pos_z");		player_obj_z[gcnf] = read4(true);
+
+		var d_x = player_obj_x_old - player_obj_x[gcnf];
+		var d_y = player_obj_y_old - player_obj_y[gcnf];
+		var d_z = player_obj_z_old - player_obj_z[gcnf];
+
+		var distance = Math.sqrt(d_x*d_x + d_y*d_y + d_z*d_z);
+
+		player_obj_xyz_delta[gcnf] = distance;
+		player_obj_x_old = player_obj_x[gcnf];
+		player_obj_y_old = player_obj_y[gcnf];
+		player_obj_z_old = player_obj_z[gcnf];
+
+
+	} else {
+		make_label("room_num");		read4();
+		make_label("pos_x");		read4(true);
+		make_label("pos_y");		read4(true);
+		make_label("pos_z");		read4(true);
+	}
+	make_label("mat_11");		read4(true);
+	make_label("mat_21");		read4(true);
+	make_label("mat_31");		read4(true);
+	make_label("mat_12");		read4(true);
+	make_label("mat_22");		read4(true);
+	make_label("mat_32");		read4(true);
+	make_label("mat_13");		read4(true);
+	make_label("mat_23");		read4(true);
+	make_label("mat_33");		read4(true);
+	
+	//if // the condition is checked in game engine
+
+	// obj_num = 0 is surely player
+	if(obj_num == 0){
+		make_label("player_flags");	read4();
+	}
+
+/*
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+
+	var maybe_opcode = globals.data_view.getUint8(globals.i);
+	
+	if((0 < maybe_opcode) && (maybe_opcode <= 26)){    //will read 04 and this its opcode, while in fact it's player_flag=dead,so bad method
+		return;
+	} else {
+		make_label("player_flags");	read4();
+	}
+
+*/
+
+}
+
+
+new_frames = {};
+
+function DemoReadNewFrame(){
+
+	globals.count_newFrame ++;
+	new_frames[globals.count_newFrame] = globals.i;
+
+	create_new_box("DemoReadNewFrame", 2);
+	globals.active_div2.setAttribute("new_frame", 1);
+	
+	make_label("next_frame");	read4(true);
+	make_label("frame_time");	read4(true);
+}
+
+
+
+player_afterburner = {};
+
+player_info_energy = {};
+player_info_shield = {};
+player_ammo_vauss = {};
+player_ammo_napalm = {};
+player_ammo_massdriver = {};
+
+player_ammo_concussion = {};
+player_ammo_homing = {};
+player_ammo_frag = {};
+player_ammo_smart = {};
+player_ammo_guided = {};
+player_ammo_cyclone = {};
+player_ammo_impact = {};
+player_ammo_napalm_rocket = {};
+player_ammo_mega = {};
+player_ammo_blackshark = {};
+
+
+function DemoReadPlayerInfo(){
+
+	var gcnf = globals.count_newFrame ;
+	create_new_box("DemoReadPlayerInfo", 1);
+	make_label("energy");		player_info_energy[gcnf] = read2();
+	make_label("shield");		var shield = read2();
+
+	if(shield > 1000){
+		shield = -1;
+	}
+	player_info_shield[gcnf] = shield;
+	
+	make_label("ammo");		read2();
+	make_label("ammo_vauss");	player_ammo_vauss[gcnf] = read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+	make_label("ammo_mass_driver");	player_ammo_massdriver[gcnf] = read2();
+	make_label("ammo_napalm");	player_ammo_napalm[gcnf] = read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+
+	make_label("ammo_concussion");	player_ammo_concussion[gcnf] = read2();
+	make_label("ammo_homing");	player_ammo_homing[gcnf] = read2();
+	make_label("ammo_impact");	player_ammo_impact[gcnf] = read2();
+	make_label("ammo_smart");	player_ammo_smart[gcnf] = read2();
+	make_label("ammo_mega");	player_ammo_mega[gcnf] = read2();
+	make_label("ammo_frag");	player_ammo_frag[gcnf] = read2();
+	make_label("ammo_guided");	player_ammo_guided[gcnf] = read2();
+	make_label("ammo_napalmR");	player_ammo_napalm_rocket[gcnf] = read2();
+	make_label("ammo_cyclone");	player_ammo_cyclone[gcnf] = read2();
+	make_label("ammo_blackshark");	player_ammo_blackshark[gcnf] = read2();
+
+	make_label("ammo");		read2();
+
+	make_label("weapon1_idx");	read4();
+	make_label("weapon2_idx");	read4();
+	make_label("weapon_flags");	read4();
+	make_label("afterburner_time_left");	player_afterburner[gcnf] = read4(true);
+	make_label("fov");		read4(true);
+	
+}
+
+function DemoReadObjCreate(){
+
+	create_new_box("DemoReadObjCreate", 1);
+	make_label("type");		read1();
+	make_label("use_orient");	var use_orient = read1();
+	make_label("id");		read2();
+	make_label("roomnum");		read4();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("parent_handle");	read4();
+	make_label("type");		read1();
+	make_label("type");		read1();
+
+	if(use_orient == 1){
+
+		//globals.LE = false;
+		make_label("mat_11");	read4(true);
+		make_label("mat_21");	read4(true);
+		make_label("mat_31");	read4(true);
+		make_label("mat_12");	read4(true);
+		make_label("mat_22");	read4(true);
+		make_label("mat_32");	read4(true);
+		make_label("mat_13");	read4(true);
+		make_label("mat_23");	read4(true);
+		make_label("mat_33");	read4(true);
+		//globals.LE = true;
+
+	}
+
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var maybe_opcode = globals.data_view.getUint8(globals.i);
+	
+	if((0 < maybe_opcode) && (maybe_opcode <= 26)){
+		return;
+	} else {
+		make_label("oldobjnum");	read2();   // todo: remove this method prone to bugs
+
+	}
+
+}
+
+
+function DemoReadObjAnimChange(){
+
+	create_new_box("DemoReadObjAnimChange", 1);
+	make_label("changetime");	read4(true);
+	make_label("objnum");		read2();
+	make_label("servertime");	read4(true);
+	make_label("anim_frame");	read2();
+	make_label("is_start");		read1();
+	make_label("is_end");		read1();
+	make_label("anim_time");	read4(true);
+	make_label("maxspeed");		read4(true);
+	make_label("flags");		read1();
+	make_label("sound_index");	read2();
+
+}
+
+function DemoRead3DSound(){
+
+	create_new_box("DemoRead3DSound", 1);
+	make_label("objnum");		read2();
+	make_label("soundidx");		read2();
+	make_label("volume");	read4(true);
+}
+
+
+
+weapon_fire_foes = {};
+weapon_objnum_foes = {}; 		objnum_old = 0;		
+weapon_fire_unid_foes = {};		unid_foes_old = 0;
+
+weapon_fire_player = {};
+weapon_fire_unid_player = {};		unid_player_old = {};
+
+lut_unid={
+	1824061605: "flare",
+	3160918772: "laser",
+	3944212815: "superlaser",
+	2156179626: "vauss",
+	1759240681: "massdriver",
+	3556852988: "napalm",
+	1931104075: "microwave",
+	2335156110: "plasma",
+	1897546053: "EMDgun",
+	1263968229: "fusion",
+	2387066691: "omega",
+	2796992103: "frag",
+	3714725265: "homing",
+	890741753: "concussion",
+	1299777288: "guided",
+	4065407020: "impact",
+	2937868739: "napalm_rocket",
+	2658369423: "smart",
+	3425862777: "cyclone",
+	3203023390: "mega",
+	1202695974: "blackshark",
+	
+}
+
+
+function DemoReadWeaponFire(){
+
+	create_new_box("DemoReadWeaponFire", 1);
+	make_label("gametime");		read4(true);
+	make_label("old_objnum");	var objnum = read2();
+	make_label("unique_id_weapon");	var unid = read4();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("vec_x_normal");	read4(true);
+	make_label("vec_y_normal");	read4(true);
+	make_label("vec_z_normal");	read4(true);
+	make_label("weapobjnum");	read2();
+	make_label("gunnum");		read2();
+
+	
+	if(objnum == 0) { // i guess it's player
+		
+		weapon_fire_player[globals.count_newFrame] = Object.keys(weapon_fire_player).length;
+
+		if(unid != unid_player_old){
+
+			var unid_str = unid;
+			if(Object.keys(lut_unid).includes(unid+"")){
+				unid_str = lut_unid[unid];
+			}
+
+			weapon_fire_unid_player[globals.count_newFrame] = unid_str;
+			unid_player_old = unid;
+
+		}
+	} else {
+
+		weapon_fire_foes[globals.count_newFrame] = Object.keys(weapon_fire_foes).length; 
+
+		if(objnum != objnum_old){
+			weapon_objnum_foes[globals.count_newFrame] = objnum;
+			objnum_old = objnum;
+		}
+		if(unid != unid_foes_old){
+			weapon_fire_unid_foes[globals.count_newFrame] = unid;
+			unid_foes_old = unid;
+		}
+	}
+	
+}
+
+function DemoReadObjWeapFireFlagChanged(){
+
+	create_new_box("DemoReadObjWeapFireFlagChanged", 1);
+	make_label("weaponnum");	read2();
+	make_label("weapon_flags");	read1();
+}
+
+
+killed_objects = {}
+function DemoReadKillObject(){
+
+	
+
+	create_new_box("DemoReadKillObject", 1);
+	make_label("objnum");		killed_objects[globals.count_newFrame] = read2();
+	make_label("killer");		read2();
+	make_label("damage");		read4(true);
+	make_label("death_flags");	read4();
+	make_label("delay");		read4(true);
+	make_label("seed");		read2();
+}
+
+function DemoReadMSafe(){
+
+	create_new_box("DemoReadMSafe", 1);
+	make_label("length");		var len = read2();
+
+
+	//skipping
+	//globals.i += len;
+
+	if(globals.data_view.byteLength - globals.i < len){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var buf ="";
+	var char = 0xff;
+	for(var i=0; i<len; i++){
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(char);
+	}
+	make_label("multi_info");	
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+
+	globals.active_div.appendChild(sp);
+}
+
+powerups = {}
+function DemoReadPowerups(){
+
+	create_new_box("DemoReadPowerups", 1);
+	make_label("length");		var len = read2();
+
+
+	//skipping
+	//globals.i += len;
+
+	if(globals.data_view.byteLength - globals.i < len){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+
+	var buf ="";
+	var char = 0xff;
+	for(var i=0; i<len; i++){
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += char; // String.fromCharCode(char); //doesnt look like text
+	}
+	make_label("power_up_info");	
+	powerups[globals.count_newFrame] = buf;
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+
+	globals.active_div.appendChild(sp);
+
+}
+
+persistantHUDmessages = {};
+function DemoReadPersistantHUDMessage(){
+
+	create_new_box("DemoReadPersistantHUDMessage", 1);
+	globals.active_div.parentNode.setAttribute("hud_msg", 1);
+
+	make_label("color");		read4();
+	make_label("x");		read4();
+	make_label("y");		read4();
+	make_label("time");		read4(true);
+	make_label("flags");		read4();
+	make_label("sound_idx");	read4();
+	make_label("msglength");	var len = read2();
+
+	var buf ="";
+	var char = 0xff;
+	while(char != 0x00 && buf.length < 200){
+
+		if(globals.data_view.byteLength - globals.i < 1){
+			globals.eof = true;
+			console.log("EOF reached");
+			return;
+		}
+
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(char);
+	}
+	make_label("HUDmessage");
+	persistantHUDmessages[globals.count_newFrame] = buf;	
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+
+	
+
+	globals.active_div.appendChild(sp);
+
+}
+
+function DemoReadTurretChanged(){
+
+	create_new_box("DemoReadTurretChanged", 1);
+	make_label("time");		read4(true);
+	make_label("old_objnum");	read2();
+	make_label("turret_time");	read4(true);
+	make_label("num_turrets");	var num = read2();
+
+	if(globals.data_view.byteLength - globals.i < num*4){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	for(var i = 0; i<num; i++){
+
+		make_label("multi_info");	read4(true);
+	}
+}
+
+player_death = {};
+function DemoReadPlayerDeath(){
+
+	player_death[globals.count_newFrame] = Object.keys(player_death).length;
+
+	create_new_box("DemoReadPlayerDeath", 1);
+	make_label("playernum");	read2();
+	make_label("melee");		read1();
+	make_label("fate");		read4();
+
+}
+
+function DemoReadCollidePlayerWeapon() {
+
+	create_new_box("DemoReadCollidePlayerWeapon", 1);
+	make_label("playernum");	read2();
+	make_label("weaponnum");	read2();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("vec_x_normal");	read4(true);
+	make_label("vec_y_normal");	read4(true);
+	make_label("vec_z_normal");	read4(true);
+	make_label("normal_dir");	read1();
+}
+
+function DemoReadCollideGenericWeapon(){
+
+	create_new_box("DemoReadCollideGenericWeapon", 1);
+	make_label("generic_num");	read2();
+	make_label("weaponnum");	read2();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("vec_x_normal");	read4(true);
+	make_label("vec_y_normal");	read4(true);
+	make_label("vec_z_normal");	read4(true);
+	make_label("normal_dir");	read1();
+}
+
+function DemoReadAttachObj(){
+
+	create_new_box("DemoReadAttachObj", 1);
+	make_label("old_objnum_parent");	read2();
+	make_label("parent_ap");		read1();
+	make_label("old_objnum_child");		read2();
+	make_label("child_ap");			read1();
+	make_label("f_aligned");		read1();
+}
+
+
+function DemoReadAttachObjRad(){
+
+	create_new_box("DemoReadAttachObjRad", 1);
+	make_label("old_objnum_parent");	read2();
+	make_label("parent_ap");		read1();
+	make_label("old_objnum_child");		read2();
+	make_label("rad");			read4(true);
+}
+
+
+function DemoReadUnattachObj(){
+
+	create_new_box("DemoReadUnattachObj", 1);
+	make_label("old_objnum");	read2();
+
+}
+
+cinematics = {}
+function DemoReadCinematics(){
+
+	create_new_box("DemoReadCinematics", 1);
+	make_label("length");		var len = read2();
+
+	cinematics[globals.count_newFrame] = Object.keys(cinematics).length;
+
+	if(globals.data_view.byteLength - globals.i < len){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+	
+	//skip
+	globals.i += len;
+
+}
+
+
+function DemoReadObjLifeLeft(){
+
+	create_new_box("DemoReadObjLifeLeft", 1);
+	make_label("old_objnum");		read2();
+	make_label("use_lifeleft");		var b =	read1();
+	if(b){
+		make_label("lifeleft");		read4(true);
+	}
+
+}
+
+
+var last_valid_opcode = 0;
+function read_opcode(){
+	
+	if(globals.eof){
+		return;
+	};
+
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var opcode = globals.data_view.getUint8(globals.i); 
+	globals.i+=1;
+
+	//
+
+	switch(opcode){
+
+		case 0x01 :
+			last_valid_opcode = opcode;
+			DemoReadObj();
+			break;
+
+		case 0x02 :
+			last_valid_opcode = opcode;
+			DemoReadNewFrame();
+			break;
+	
+		case 0x03:
+			last_valid_opcode = opcode;
+			DemoReadWeaponFire();
+			break;
+
+	
+		case 0x04 :
+			last_valid_opcode = opcode;
+			DemoReadHudMessage();
+			break;
+
+		case 0x05 :
+			last_valid_opcode = opcode;
+			DemoRead3DSound();
+			break;
+
+		case 0x06 :
+			last_valid_opcode = opcode;
+			DemoReadObjCreate();
+			break;
+
+		case 0x07 :
+			last_valid_opcode = opcode;
+			DemoReadObjAnimChange();
+			break;
+		case 0x08 :
+			last_valid_opcode = opcode;
+			DemoReadTurretChanged();
+			break;
+
+		case 0x09 :
+			last_valid_opcode = opcode;
+			DemoReadKillObject();
+			break;
+
+		case 0x0a :
+			last_valid_opcode = opcode;
+			DemoReadPlayerDeath();
+			break;
+
+		case 0x0b :
+			last_valid_opcode = opcode;
+			DemoReadCollidePlayerWeapon();
+			break;
+
+		case 0x0c :
+			last_valid_opcode = opcode;
+			DemoReadCollideGenericWeapon();
+			break;
+
+		case 0x0d :
+			last_valid_opcode = opcode;
+			DemoReadAttachObj();
+			break;
+
+		case 0x0e :
+			last_valid_opcode = opcode;
+			DemoReadAttachObjRad();
+			break;
+
+		case 0x0f :
+			last_valid_opcode = opcode;
+			DemoReadUnattachObj();
+			break;
+
+		case 0x10 :
+			last_valid_opcode = opcode;
+			DemoReadObjWeapFireFlagChanged();
+			break;
+
+		case 0x11 :
+			last_valid_opcode = opcode;
+			DemoReadPlayerInfo();
+			break;
+
+		case 0x12:
+			last_valid_opcode = opcode;
+			DemoReadMSafe();
+			break;
+
+		case 0x13:
+			last_valid_opcode = opcode;
+			DemoReadPowerups();
+			break;
+
+		case 0x14:
+			last_valid_opcode = opcode;
+			DemoReadCinematics();
+			break;
+
+		case 0x15:
+			last_valid_opcode = opcode;
+			DemoReadPersistantHUDMessage();
+			break;
+	
+		//case 0x16:
+	
+			//break;
+
+      //todo : missing opcodes
+
+		case 0x19:
+			last_valid_opcode = opcode;
+			DemoReadObjLifeLeft();
+			break;
+
+
+		default: 
+			alert("unknown opcode : " + opcode + " at " + globals.i + " (last_valid_opcode="+last_valid_opcode+")");
+			return 0;
+	}
+	return 1;
+}
+
+//------------------------------------------------------------------------
+
+globals.cur_graph_title = "";
+function draw_graph(h_min, h_max, rescale_h_to, obj_data, color, qs_append_to="#graphs"){
+
+
+	var keys = Object.keys(obj_data);
+	w = globals.count_newFrame;
+
+
+	var can = document.createElement("canvas");
+	can.setAttribute("width", w);
+	can.setAttribute("height", rescale_h_to); //(h_max-h_min));
+	can.setAttribute("class", "graph");
+
+	var scale_h = rescale_h_to / ((h_max-h_min)*1.0);
+
+	var ctx = can.getContext("2d");
+	ctx.fillStyle = "rgb(0, 0, 0)";
+        ctx.fillRect(0, 0, w, (h_max-h_min)*scale_h);
+
+	
+	var color_lut = {
+		"red":"rgb(100, 0, 0)",
+		"red1": "rgb(255, 0, 0)",
+		"blue": "rgb(0, 0, 100)",
+		"blue1": "rgb(0, 0, 255)",
+		"yellow": "rgb(120, 100, 0)",
+		"yellow1": "rgb(255, 200, 0)",
+	};
+
+	ctx.fillStyle = color_lut[color];
+
+	var val = obj_data[0];
+	for(var i=0; i<w; i++){
+
+		 
+		if(keys.includes(""+i)){
+			//ctx.putImageData(pixel, i, obj_data[i]);
+			val = Math.max(h_min, obj_data[i]);
+			val = Math.min(h_max, obj_data[i]);
+			ctx.fillRect(i, (h_max - val)*scale_h, 1, val*scale_h);
+			
+		} 
+		ctx.fillRect(i, (h_max - val)*scale_h, 1, val*scale_h);
+
+	}
+	ctx.fillStyle = color_lut[color+"1"];
+	val = obj_data[0];
+	for(var i=0; i<w; i++){
+
+		if(keys.includes(""+i)){
+			val = obj_data[i];
+			ctx.fillRect(i, (h_max - val)*scale_h, 1, 1);
+			
+		} 
+		ctx.fillRect(i, (h_max - val)*scale_h, 1, 1);
+	}
+	
+
+	//graph_wrapper.appendChild(can);
+	document.querySelector(qs_append_to).appendChild(can);
+
+        can.addEventListener("mousemove", function (e) {
+            getMousePosition(can, e);
+        }); 
+	
+}
+
+
+function getMousePosition(canvas, event) {
+           let rect = canvas.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+
+	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(2) +  "| y: " + y.toFixed(2) ;
+
+}
+
+function getMousePosition_band(band, event) {
+           let rect = band.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+
+	var content = event.target.innerText;
+
+	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(2) +  "| y: " + y.toFixed(2) + " ||| " + content ;
+
+}
+
+
+
+function draw_graph_title(name, qs_append_to="#graph_titles"){
+
+
+	var d = document.createElement("div");
+	d.setAttribute("class", "graph_title");
+	d.innerText = name;
+	
+	document.querySelector(qs_append_to).appendChild(d);
+
+
+}
+
+
+function draw_graph_change(obj_data, qs_append_to="#graphs"){
+
+	h_min=0;
+	h_max=30;
+
+	var keys = Object.keys(obj_data);
+	//w = keys.length;
+	w = globals.count_newFrame;
+
+	var can = document.createElement("canvas");
+	can.setAttribute("width", w);
+	can.setAttribute("height", (h_max-h_min));
+	can.setAttribute("class", "graph_change");
+
+	var ctx = can.getContext("2d");
+	ctx.fillStyle = "rgb(0, 0, 0)";
+        ctx.fillRect(0, 0, w, (h_max-h_min));
+
+	var old_val = obj_data[keys[0]];
+	ctx.fillStyle = "rgb(255, 200, 0)";
+
+	var val = obj_data[keys[0]];
+	for(var i=0; i<w; i++){
+
+		if(keys.includes(""+i)){
+
+			val = obj_data[i];
+			var change = val - old_val;
+
+			if(Math.abs(change) > 1){
+				ctx.fillStyle = "rgb(255, 0, 200)";
+			}
+
+			if( change > 0 ){
+
+				ctx.fillRect(i, 0, 1, (h_max-h_min)/2);
+			}
+			if( change < 0 ){
+
+				ctx.fillRect(i,  (h_max-h_min)/2, 1, (h_max-h_min)/2);
+			}
+			if( change == 0 ){
+
+				ctx.fillRect(i,  (h_max-h_min)/2, 1, 1);
+			}
+			old_val = val;
+
+			if(Math.abs(change) > 1){
+				ctx.fillStyle = "rgb(255, 200, 0)";
+			}
+		} else {
+
+			ctx.fillRect(i,  (h_max-h_min)/2, 1, 1);
+
+		}
+	}
+
+	document.querySelector(qs_append_to).appendChild(can);
+
+
+	  can.addEventListener("mousemove", function (e) {
+            getMousePosition(can, e);
+        }); 
+
+}
+
+
+
+
+function draw_separation(h, qs_append_to="#graphs"){
+
+	var can = document.createElement("canvas");
+	var w = globals.count_newFrame;
+	can.setAttribute("width", w);
+	can.setAttribute("height", h);
+	can.setAttribute("class", "graph_change");
+
+	var ctx = can.getContext("2d");
+	ctx.fillStyle = "rgb(0, 0, 0)";
+        ctx.fillRect(0, 0, w, h);
+
+	document.querySelector(qs_append_to).appendChild(can);
+
+
+	  can.addEventListener("mousemove", function (e) {
+            getMousePosition(can, e);
+        }); 
+
+}
+
+
+
+
+function draw_label_band(dic, qs_append_to="#graphs"){
+
+	var band = document.createElement("div");
+	band.setAttribute("class", "band");
+
+
+	var keys = Object.keys(dic);
+	var x_old = 0;
+
+
+
+	for(var i = 0; i<keys.length-1; i++){
+
+		var d = document.createElement("div");
+		d.setAttribute("class", "band_item");
+		d.innerText = dic[keys[i]];
+
+		d.style.setProperty("width", (keys[i+1] - keys[i]) +"px");
+		//x_old = ;
+		
+		band.appendChild(d);
+
+	}
+
+	var d = document.createElement("div");
+	d.setAttribute("class", "band_item");
+	d.setAttribute("unfinished", 1);
+	d.innerText = dic[keys[keys.length-1]];
+
+	d.style.setProperty("width", (globals.count_newFrame - keys[keys.length-1])+"px");
+	//x_old = ;
+		
+	band.appendChild(d);
+
+	document.querySelector(qs_append_to).appendChild(band);
+
+
+	band.addEventListener("mousemove", function (e) {
+      		 getMousePosition_band(band, e);
+      	  }); 
+}
+
+function draw_all_graphs(){
+
+	/*
+	draw_graph_title("player xyz");
+	draw_graph(0, 2000, 200, player_obj_x, "#graphs");
+	draw_graph(0, 2000, 200, player_obj_y, "#graphs");
+	draw_graph(0, 2000, 200, player_obj_z, "#graphs");
+	*/
+
+	draw_graph_title("speed");
+	//draw_graph_change(player_obj_xyz_delta);
+	draw_graph(0, 15, 130, player_obj_xyz_delta, "red");
+
+
+	draw_graph_title("afterburner");
+	draw_graph_change(player_afterburner, "#graphs");
+	draw_graph(0, 5, 100, player_afterburner, "red", "#graphs");
+	
+	draw_graph_title("energy");
+	draw_graph_change(player_info_energy, "#graphs");
+	draw_graph(0, 200, 100, player_info_energy, "yellow",  "#graphs");
+
+	draw_graph_title("shield");
+	draw_graph_change(player_info_shield, "#graphs");
+	draw_graph(0, 200, 100, player_info_shield, "blue", "#graphs");
+
+	HUDmessages_GB[1]="...";
+	draw_graph_title("guidebot messages");
+	draw_label_band(HUDmessages_GB);
+
+	HUDmessages[1]="...";
+	draw_graph_title("HUD messages");
+	draw_label_band(HUDmessages);
+
+	persistantHUDmessages[1]="...";
+	draw_graph_title("perHUD messages");
+	draw_label_band(persistantHUDmessages);
+
+	
+	draw_graph_title("player room");
+	draw_label_band(player_obj_room);
+
+	cinematics[1]=(-1);
+	draw_graph_title("cinematics");
+	draw_graph_change(cinematics);
+
+
+	draw_graph_title("");
+	draw_separation(96);
+
+
+	draw_graph_title("foes fire");
+	draw_graph_change(weapon_fire_foes, "#graphs");
+
+	weapon_objnum_foes[1] = "...";
+	draw_graph_title("foe who fires");
+	draw_label_band(weapon_objnum_foes);
+
+	weapon_fire_unid_foes[1] = "...";
+	draw_graph_title("foe weapon");
+	draw_label_band(weapon_fire_unid_foes);
+
+	killed_objects[1]="...";
+	draw_graph_title("killed objects");
+	draw_label_band(killed_objects);
+
+	draw_graph_title("");
+	draw_separation(96);
+	
+	draw_graph_title("player fire");
+	draw_graph_change(weapon_fire_player, "#graphs");
+
+	weapon_fire_unid_player[1] = "...";
+	draw_graph_title("player weapon");
+	draw_label_band(weapon_fire_unid_player);
+
+	draw_graph_title("vauss");
+	draw_graph_change(player_ammo_vauss, "#graphs");
+
+	draw_graph_title("massdriver");
+	draw_graph_change(player_ammo_massdriver, "#graphs");
+
+	draw_graph_title("napalm");
+	draw_graph_change(player_ammo_napalm, "#graphs");
+
+	draw_graph_title("concussion");
+	draw_graph_change(player_ammo_concussion, "#graphs");
+	draw_graph_title("homing");
+	draw_graph_change(player_ammo_homing, "#graphs");
+	draw_graph_title("guided");
+	draw_graph_change(player_ammo_guided, "#graphs");
+	draw_graph_title("frag");
+	draw_graph_change(player_ammo_frag, "#graphs");
+	draw_graph_title("impact");
+	draw_graph_change(player_ammo_impact, "#graphs");
+	draw_graph_title("napalm_rocket");
+	draw_graph_change(player_ammo_napalm_rocket, "#graphs");
+	draw_graph_title("smart");
+	draw_graph_change(player_ammo_smart, "#graphs");
+	draw_graph_title("cyclone");
+	draw_graph_change(player_ammo_cyclone, "#graphs");
+	draw_graph_title("mega");
+	draw_graph_change(player_ammo_mega, "#graphs");
+	draw_graph_title("blackshark");
+	draw_graph_change(player_ammo_blackshark, "#graphs");
+
+}
+
+
+window.addEventListener("mousemove", ()=> {
+
+	ret = document.querySelector("#reticle");
+	ret.style.setProperty("width", event.clientX);
+	//ret.style.setProperty("top", event.clientY);
+
+	ret_y = document.querySelector("#reticle_y");
+	ret_y.style.setProperty("height", event.clientY);
+
+
+});
+
+
+
+</script>
+
+
