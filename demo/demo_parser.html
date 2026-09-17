@@ -265,7 +265,9 @@ function load_file(files){
 
 	var fsm_osiris = new FSM("4F 53 49 52 49 53");
 	var fsm_level = new FSM("6C 65 76 65 6C");
-	var fsm_a040 = new FSM("A0 40 00 00 90 42");
+	//var fsm_a040 = new FSM("A0 40 00 00 90 42");
+	var fsm_a040 = new FSM("A0 40 00 00");
+
 
 	function alert_pattern(a){ alert("failed to parse demo file, lacking pattern "+ a);}
 
@@ -283,12 +285,12 @@ function load_file(files){
 
 	var i_a040 = find_first_match(globals.data_view, i_level, globals.data_view.byteLength, fsm_a040);
 	if(i_a040 == -1){
-		alert_pattern("0x0000000002");
+		alert_pattern("0xA0400000");
 		return;
 	}
 
 	
-	globals.i = i_a040 ;
+	globals.i = i_a040 +2 ;
 	globals.create_html = false;
 
 	//globals.i = 14294146; ///////////////
@@ -303,7 +305,7 @@ function load_file(files){
 
 
 	//opcode
-	for(var k=0; k < 1000000; k++){
+	for(var k=0; k < 4000000; k++){
 		if(0 == read_opcode()){
 			break;
 		}
