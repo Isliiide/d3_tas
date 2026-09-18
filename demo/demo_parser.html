@@ -1,30 +1,29 @@
 <script>
-  /*
+/*
 written by Islide @ decent 3 speedrun.com
 
 known issues :
-- I'm filtering "GrameFrame" hud messages, which should be corrected to "GameFrame" once the game is updated too
+- I'm filtering "GrameFrame" hud messages, which should be corrected to "GameFrame" once the game is updated too (why not filter both ;) )
 - The build of the game I had was writing opcode 0x13 instead of 0x14, hence creating faulty demo files, but the problem isn't due to this parser 
 (problem on lv7 demo files, where this opcode is often used)
-- the method for skipping header bytes and going straight to the recorded demo data may fail on levels not from the original d3 campaign (if the level has a name different than "level2" per say)
+- the method for skipping header bytes and going straight to the recorded demo data may fail on levels not from the original d3 campaign 
+(if the level has a name different than "level2" per say)
 
 the parser hasn't been tested in multiplayer, so there's no garantee it works (especially the assumption that player = obj # 0, which surely only works in single player mode)
-
-the function DemoWriteAttachObj was writing the wrong opcode (0x13 instead of 0x14), causing trouble with demo playback
-
 */
 </script>
 
 <style>
 
 body {
-background: #999;
+background: #3b3b3b;
  font-size: 14px;
  font-family: consolas;
+--color:white;
 }
   
 .data_div  {
- background: #ddd;
+ background: #232323;
 	
 	  font-weight: normal;
 	 border : 1px solid black;
@@ -36,38 +35,42 @@ background: #999;
  
  .data_label {
 
-	
-
+	color: white;
 }
-
-
 
 .data_val {
 
-	color:blue;
+	color:#ffcb00;
 }
 
 .data_title {
-background: #e8e8ab;
+background: #dab764;
   padding: 4px;
 }
 
-.data_title[new_frame]{
+.data_title[header]{
 
 	background : pink;
 	border: 1px solid black;
 	margin: 6px;
 }
 
+.data_title[new_frame]{
+
+	background : #3e00e9;
+	border: 1px solid black;
+	margin: 6px;
+}
+
 .data_title[read_obj]{
 
-	background : #b0d7c3;
+	background : #505050;
 	--border: 1px solid black;
 	--margin: 6px;
 }
 
 .data_title[hud_msg]{
-	background: #ff9298;
+	background: #c48100;
 }
 
 .data_title[hud_msg] .data_div {
@@ -91,7 +94,7 @@ background: #e8e8ab;
 
 
 #main_div{
-	display:none;
+	--display:none;
 }
 
 #graph_wrapper{
@@ -227,10 +230,12 @@ globals = {
 	i: 0,
 	active_div: null,
 	active_div2: null,
-	create_html: false,
+	create_html: true,
 	LE: true,
-	count_newFrame: 0,
+	count_newFrame: -1, // -1 for the header box
 	eof: false,
+	header_gametime: [0xFF, 0xFF, 0xFF, 0xFF],
+	should_stop_on_new_frame: false,
 };
 
 function dec_to_hex(dec){
@@ -256,20 +261,50 @@ function load_file(files){
 
 	const reader = new FileReader();
   reader.addEventListener('loadend', (event) => {
+    //console.log(event.target.result);
 
 	document.querySelector("#cood").innerHTML = "wait for html to generate";
 	
 	console.log("file_loaded");
 	
+
 	globals.data_view = new DataView(event.target.result);
 
+	main_div = document.createElement("div");
+	main_div.setAttribute("id", "main_div");
+	document.body.appendChild(main_div);
+
+	input_div = document.createElement("div");
+	input_div.setAttribute("id", "input_div");
+	input_div.innerHTML = "<span style='color:white'>load specific frame : </span> \
+		<button onclick='change_frame(-1)'>←</button>\
+		<input onchange='create_frame_html(this.value)' value='0'></input> \
+		<button onclick='change_frame(1)'>→</button>";
+	document.body.appendChild(input_div);
+
+	res_div = document.createElement("div");
+	res_div.setAttribute("id", "input_result");
+	document.body.appendChild(res_div);
+
+	globals.active_div = main_div;
+	globals.active_div2 = main_div;
+
+
+	globals.create_html = true;
+	DemoReadHeader();
+	globals.create_html = false; 
+
+	function alert_pattern(a){ alert("failed to parse demo file, lacking pattern "+ a);}
+
+	  
+	/*
+	// old pattern matching method
 	var fsm_osiris = new FSM("4F 53 49 52 49 53");
 	var fsm_level = new FSM("6C 65 76 65 6C");
 	//var fsm_a040 = new FSM("A0 40 00 00 90 42");
 	var fsm_a040 = new FSM("A0 40 00 00");
 
-
-	function alert_pattern(a){ alert("failed to parse demo file, lacking pattern "+ a);}
+	// 02 with 57 times 0x00 before, looks reliable
 
 	var i_osiris = find_first_match(globals.data_view, 0, globals.data_view.byteLength, fsm_osiris);
 	if(i_osiris == -1){
@@ -288,24 +323,24 @@ function load_file(files){
 		alert_pattern("0xA0400000");
 		return;
 	}
-
 	
-	globals.i = i_a040 +2 ;
-	globals.create_html = false;
+	globals.i = i_a040 -74 ; //+2?
+	*/
 
-	//globals.i = 14294146; ///////////////
+	  //method using header info
+	var fsm_02time = new FSM("02 " + globals.header_gametime.join(" "));
 
-	main_div = document.createElement("div");
-	//main_div.setAttribute("class", "data_div");
-	main_div.setAttribute("id", "main_div");
-	document.body.appendChild(main_div);
-
-	globals.active_div = main_div;
-	globals.active_div2 = main_div;
+	var i_02time = find_first_match(globals.data_view, globals.i, globals.data_view.byteLength, fsm_02time);
+	if(i_02time == -1){
+		alert_pattern("0x02+gametime");
+		return;
+	}
+	globals.i  = i_02time -5 ;
 
 
 	//opcode
-	for(var k=0; k < 4000000; k++){
+	max_opcodes_read = 4000000;
+	for(var k=0; k < max_opcodes_read; k++){
 		if(0 == read_opcode()){
 			break;
 		}
@@ -318,14 +353,13 @@ function load_file(files){
 	draw_all_graphs();
 
 	document.querySelector("#file_loader").style.setProperty("background", "#cbf");
-
-
 	return;
 	
 
   });
 
   reader.readAsArrayBuffer(files[0]);
+	//console.log("coucou");
 }
 
 
@@ -486,7 +520,9 @@ function create_new_box(name, make_active=0){
 	var title = document.createElement("div");
 	title.setAttribute("class", "data_title");
 	title.innerHTML = globals.i + " <b>" + name + "</b>";
-	if(make_active == 2){ title.innerHTML += " ("+ globals.count_newFrame + ")"; }
+
+	//if(make_active == 2){ title.innerHTML += " ("+ globals.count_newFrame + ")"; }
+
 	title.appendChild(d);
 	
 	globals.active_div2.appendChild(title);
@@ -508,6 +544,146 @@ function create_new_box(name, make_active=0){
 
 }
 //----------------------------------------------------------------
+
+
+function change_frame(val){
+
+	var my_input = document.querySelector("#input_div input");
+	var frame_n = parseInt(my_input.value,10) + val;
+	if(frame_n < 0){
+
+		my_input.value = 0;
+		return;
+	}
+
+	if(frame_n >= Object.keys(new_frames).length){
+
+		my_input.value = Object.keys(new_frames).length-1; 
+		return;
+	}
+	my_input.value = frame_n;
+
+
+	create_frame_html(frame_n);
+
+}
+
+
+function create_frame_html(frame_n_str){
+
+	var frame_n = parseInt(frame_n_str,10);
+
+	
+
+	if(frame_n < 0){
+
+		alert("invalid frame index");
+		return;
+	}
+
+	if(frame_n >= Object.keys(new_frames).length){
+
+		alert("invalid frame index");
+		return;
+	}
+
+console.log("frame_n = "+frame_n);
+
+	globals.create_html = true;
+	globals.eof = false;
+	document.querySelector("#input_result").innerHTML = "";
+		
+
+	globals.i = new_frames[frame_n]-1;
+	
+
+	var max_opcodes_read = 10000;
+	for(var k=0; k < max_opcodes_read; k++){
+		if(0 == read_opcode()){
+			break;
+		}
+		if(globals.eof){
+			break;
+		}
+		globals.should_stop_on_new_frame = true;
+		//console.log(k);
+	}
+
+	globals.should_stop_on_new_frame = false;
+	globals.create_html = false;
+
+	document.querySelector("#input_result").appendChild(document.querySelector("#main_div .data_title[new_frame]:not([header])"));
+
+	var div_blank = document.createElement("div");
+	div_blank.style.setProperty("height", "300px");
+	document.querySelector("#input_result").appendChild(div_blank);
+}
+
+
+
+function DemoReadHeader(){
+
+
+	create_new_box("DemoReadHeader0", 2);
+	globals.active_div.parentNode.setAttribute("header", 1);
+	
+
+	//--------
+	var buf ="";
+	var char = 0xff;
+	while(char != 0x00 && buf.length < 10){
+
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(char);
+	}
+	
+	make_label("D3sign");
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+	globals.active_div.appendChild(sp);
+	//--------
+
+	make_label("version");		read2();
+
+	//--------
+	var buf2 ="";
+	var char = 0xff;
+	while(char != 0x00 && buf2.length < 260){
+
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf2 += String.fromCharCode(char);
+	}
+	
+	make_label("demo_mission");
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf2;
+	globals.active_div.appendChild(sp);
+	//--------
+
+	make_label("level_num");	read4();
+
+	globals.header_gametime[0] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.header_gametime[1] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.header_gametime[2] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.header_gametime[3] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.i += -4;
+
+	make_label("demo_gametime");	read4(true);
+	make_label("frame_count");	read4();
+
+	// LGSXlateTables(Demo_cfp);
+
+  	// LGSRooms(Demo_cfp);
+
+ 	// LGSTriggers(Demo_cfp);
+
+	//lots of tricky stuff
+
+}
 
 
 HUDmessages = {};
@@ -548,7 +724,6 @@ function DemoReadHudMessage(){
 	var sp = document.createElement("span");
 	sp.setAttribute("class", "data_val");
 	sp.innerText = buf;
-
 	globals.active_div.appendChild(sp);
 }
 
@@ -619,6 +794,7 @@ function DemoReadObj(){
 	make_label("mat_33");		read4(true);
 	
 	//if // the condition is checked in game engine
+	//make_label("player_flags");	read4();
 
 	// obj_num = 0 is surely player
 	if(obj_num == 0){
@@ -767,9 +943,10 @@ function DemoReadObjCreate(){
 	if((0 < maybe_opcode) && (maybe_opcode <= 26)){
 		return;
 	} else {
-		make_label("oldobjnum");	read2();   // todo: remove this method prone to bugs
+		make_label("oldobjnum");	read2();   // a tous les coups oldobjnum peut valloir un opcode :(
 
 	}
+
 
 }
 
@@ -819,6 +996,7 @@ lut_unid={
 	1897546053: "EMDgun",
 	1263968229: "fusion",
 	2387066691: "omega",
+	//missiles
 	2796992103: "frag",
 	3714725265: "homing",
 	890741753: "concussion",
@@ -829,7 +1007,14 @@ lut_unid={
 	3425862777: "cyclone",
 	3203023390: "mega",
 	1202695974: "blackshark",
-	
+	//foes
+	1647401610: "pink_laser",
+	1274890157: "red_laser",
+	1890994463: "foe_microwave",
+	1745946762: "foe_plasma",
+	4216830439: "green_laser",
+	4142173037: "foe_vauss",
+	442468024: "foe_homing",
 }
 
 
@@ -873,11 +1058,18 @@ function DemoReadWeaponFire(){
 			objnum_old = objnum;
 		}
 		if(unid != unid_foes_old){
-			weapon_fire_unid_foes[globals.count_newFrame] = unid;
+
+			var unid_str = unid;
+			if(Object.keys(lut_unid).includes(unid+"")){
+				unid_str = lut_unid[unid];
+			}
+
+			weapon_fire_unid_foes[globals.count_newFrame] = unid_str;
 			unid_foes_old = unid;
 		}
 	}
 	
+	//weapon_fire[globals.count_newFrame] = unid; //i want this to change every time
 }
 
 function DemoReadObjWeapFireFlagChanged(){
@@ -1168,7 +1360,12 @@ function read_opcode(){
 
 		case 0x02 :
 			last_valid_opcode = opcode;
-			DemoReadNewFrame();
+			if(globals.should_stop_on_new_frame){
+				globals.i += -1;
+				return 0;
+			} else {
+				DemoReadNewFrame();
+			}
 			break;
 	
 		case 0x03:
@@ -1270,8 +1467,6 @@ function read_opcode(){
 	
 			//break;
 
-      //todo : missing opcodes
-
 		case 0x19:
 			last_valid_opcode = opcode;
 			DemoReadObjLifeLeft();
@@ -1292,6 +1487,7 @@ function draw_graph(h_min, h_max, rescale_h_to, obj_data, color, qs_append_to="#
 
 
 	var keys = Object.keys(obj_data);
+	//w = keys.length;
 	w = globals.count_newFrame;
 
 
@@ -1361,7 +1557,6 @@ function getMousePosition(canvas, event) {
             let y = event.clientY - rect.top;
 
 	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(2) +  "| y: " + y.toFixed(2) ;
-
 }
 
 function getMousePosition_band(band, event) {
@@ -1372,7 +1567,6 @@ function getMousePosition_band(band, event) {
 	var content = event.target.innerText;
 
 	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(2) +  "| y: " + y.toFixed(2) + " ||| " + content ;
-
 }
 
 
@@ -1447,6 +1641,8 @@ function draw_graph_change(obj_data, qs_append_to="#graphs"){
 		}
 	}
 
+
+	//graph_wrapper.appendChild(can);
 	document.querySelector(qs_append_to).appendChild(can);
 
 
@@ -1517,6 +1713,7 @@ function draw_label_band(dic, qs_append_to="#graphs"){
 		
 	band.appendChild(d);
 
+	//graph_wrapper.appendChild(band);
 	document.querySelector(qs_append_to).appendChild(band);
 
 
