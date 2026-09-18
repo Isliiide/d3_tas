@@ -22,10 +22,16 @@ the demo_parser.html allows to open a .dem file and view a timeline of events ha
 
 # Demo hacking (wip)
 The demo reading method has been reworked, so it first makes a first pass on the demo file and gathers all newFrames indices. It's then possible to freely jump at any point in the demo. The problem is that causality is altered, and if you get back in time, maybe some enemies will already be dead because they have been killed in "the future" and kill flags are still raised for the game engine. Even if we always begin at the start of the demo and then fast forward, these flags need the whole demo file to be reloaded from the main menu to disappear.
+
 The method to seek one frame forward or backward somewhat works, but can cause the demo to abort, or the game to crash. (it's not implemented on this commit)
+
 One feature works though : you can create a file hackDemoStartFrame.txt (in Appdata/Roaming/Outrage Entertainment/Descent3), with the desired frame number, and start a demo. After a short black screen the demo will start on the wanted frame. (you can get an idea of the wanted frame through the html demo analyser)
+
 Pressing key M in a demo playback will cancel the demo flag, and you'll be able to take control of the ship and play normally. Although this only works if you started the demo record when controls were allowed for the ship (ie: not during a cutscene)
+
 The current velocity of the ship is also printed in HUD messages. It's a way to save this info in the demo file, so when the demo is canceled, the ship is given the velocity it should have had, instead of stopping still.
+
+Pressing U will lock/unlock the current velocity
 
 # Known problems :
 
