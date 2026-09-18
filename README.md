@@ -1,11 +1,11 @@
 # d3_tas
 developping TAS tools from DescentDevelopers/Descent3
 
-As of now (commit a153227) (and next commit is this readme.md) : 
+As of now (commit 9f3144c) (and next commit is this readme.md) : 
 
 # Recording/Replaying control inputs (works but not good)
 it's possible to press F9 to start recording inputs in game, F9 again to stop, then F10 to play back the recorded inputs
-It works because F9 and F10 handling has been modified in GameLoop.cpp, and Controls.cpp got updated with functions, to rec/play inputs to/from memory, as well as to/from local files. Format used was first .txt, then a custom binary format .sgc (for shrunk game controls). These can be modified with HexEdit, or viewed with the html sgc parser provided.
+It works because F9 and F10 handling has been modified in GameLoop.cpp, and Controls.cpp got updated with functions, to rec/play inputs to/from memory, as well as to/from local files. Format used was first .txt, then a custom binary format .sgc (for shrunk game controls). These can be modified with HexEdit, or viewed with the html sgc parser provided. 
 
 sgc files should be in the game directory, but this ends up being Appdata/Roaming/Outrage Entertainment/Descent3. The sgc file used by the game then needs to be named log_shrunk.sgc
 
@@ -21,7 +21,10 @@ Pressing the key L allows to enter in "diagonal control" mode, so pressing forwa
 the demo_parser.html allows to open a .dem file and view a timeline of events happening inside. It also links to the correct game frame and hex offset in the demo file. The purpose would be to find a timestamp in the demo, and ask the game to load from there, instead of using regular save files.
 
 # Demo hacking (wip)
-it should possible to play demo backwards, or instantly enter demo/playing state, to gain freedom of edition of a playthrough. This is still blurry and a wrok in progress, but the current version of the game has bits of broken inputs meant to hack the demo player. Better not touch that yet.
+The demo reading method has been reworked, so it first makes a first pass on the demo file and gathers all newFrames indices. It's then possible to freely jump at any point in the demo. The problem is that causality is altered, and if you get back in time, maybe some enemies will already be dead because they have been killed in "the future" and kill flags are still raised for the game engine. Even if we always begin at the start of the demo and then fast forward, these flags need the whole demo file to be reloaded from the main menu to disappear.
+The method to seek one frame forward or backward somewhat works, but can cause the demo to abort, or the game to crash. (it's not implemented on this commit)
+One feature works though : you can create a file hackDemoStartFrame.txt, with the desired frame number, and start a demo. After a short black screen the demo will start on the wanted frame. (you can get an idea of the wanted frame through the html demo analyser)
+Pressing key M in a demo playback will cancel the demo flag, and you'll be able to take control of the ship and play normally. Although this only works if you started the demo record when controls were allowed for the ship (ie: not during a cutscene)
 
 # Known problems :
 
@@ -37,6 +40,9 @@ it should possible to play demo backwards, or instantly enter demo/playing state
 - ((trying to modify the hlsSystem and llsSystem to update samplerate dynamically lead to a crash, bad prototype for the moment))
 - The Descent3 open source repository issued a build where a demo opcode was faulty. Demos recorded on this version of the game are likely to bug the demo_parser.html. (Issue fixed on newer versions)
 - The demo_parser.html is still subject to change, and is famously missing a couple of rare opcodes, so other demo files might also make it bug
-- Especially, demo_parser hasn't been tested in multiplayer, and hasn't been tested on fan-made levels. 
+- Especially, demo_parser hasn't been tested in multiplayer, and hasn't been tested on fan-made levels.
+- ship paralyzed if demo started recording during a cutscene
+- crashes/aborts on +1/-1 demo frames
+- causality problems when jumping around in a dmeo playback
 
 
