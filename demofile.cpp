@@ -384,7 +384,7 @@ void set_DemoRead_parse_only(bool b) { DemoRead_parse_only = b; }
 
 // global variable which will be updated with the content of hackDemoStartFrame.txt
 // will be used to start the demo from there
-int wanted_start_frame;
+int wanted_start_frame = 0;
 
 // reconstruct all the demo causality up until the wanted frame. 
 // Giving an offset will computed another frame relatively to the current one
@@ -442,6 +442,13 @@ void demo_jump_to_frame(int val) { //val should be +1 or -1 ; or 0 for reset
   }
 
   set_should_sandbag_playback(true);
+}
+
+
+hacked_velocity hackvel;
+hacked_velocity get_hacked_velocity() {
+
+  return hackvel;
 }
 //---------------------
 
@@ -1173,6 +1180,8 @@ void DemoReadObj() {
   }
 }
 
+
+
 void DemoReadHudMessage() {
 
   //reading
@@ -1192,6 +1201,18 @@ void DemoReadHudMessage() {
     AddBlinkingHUDMessage(msg);
   } else {
     AddHUDMessage(msg);
+  }
+
+
+  //velocity hack
+  float vx, vy, vz;
+  char str[9] = {};
+  int ret = std::sscanf(msg, "%8s %f %f %f", str, &vx, &vy, &vz);
+  if ((ret == 4) && (strcmp(str, "velocity") == 0)) {
+  
+    hackvel.vx = vx;
+    hackvel.vy = vy;
+    hackvel.vz = vz;
   }
 }
 

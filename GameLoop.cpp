@@ -1291,6 +1291,11 @@ void ProcessNormalKey(int key) {
    
       toggle_feed_inputs();
        return;
+
+
+    case KEY_U:
+      toggle_lock_velocity();
+      break;
        
     case KEY_M: //to playback a demo, and then exit the playback and be in tha game engine in the same state
 
@@ -1303,7 +1308,17 @@ void ProcessNormalKey(int key) {
         //SetObjectControlType(Player_object, CT_FLYING);
         // ^ what flag to regain control of the ship when its paralyzed by intro cutscene ????
 
+        // controls flag 0xffffffff cf doFlyingMovement ?
+
         Demo_flags = DF_NONE;
+
+        //Objects[Players[Player_num].objnum].movement_type = MT_PHYSICS;
+        //SetObjectControlType(&Objects[Players[Player_num].objnum], CT_FLYING);
+
+        hacked_velocity heckvel = get_hacked_velocity();
+        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.x() = heckvel.vx;
+        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.y() = heckvel.vy;
+        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.z() = heckvel.vz;
       }
         
       return;
