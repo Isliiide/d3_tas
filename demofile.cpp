@@ -304,6 +304,8 @@
 #include "gamesave.h"
 #include "demofile.h"
 
+#include <fstream> //islide
+
 extern bool is_multi_demo;
 static CFILE *Demo_cfp = nullptr;
 std::filesystem::path Demo_fname;
@@ -341,30 +343,109 @@ extern void PageInAllData();
 
 //islide
 //---------------------
-uint32_t position_old = 0;
-long demo_wanted_offset_index = -1;
-std::vector<long> demo_offsets;
 
+/*
+std::ofstream message;
+message.open("message.txt", std::ios_base::app);
+message << "demo_jump_to_frame " << wanted_start_frame << ", offset[0] = " << demo_newFrame_offsets[0] << "\n ";
+message.close();
+*/
+
+// -> we'd like to make a first pass in the demo file, to collect all newFrames indices, it might be useful
+// all of this is used in DemoPlaybackFile
+
+// flag to raise when we reach end of file. useful for breaking the loop on demo first pass 
+bool demo_eof = false;
+bool get_demo_eof() { return demo_eof; }
+void set_demo_eof(bool b) { demo_eof=b; }
+
+// flag to indicate if the first pass has been done or not
+bool demo_parsed_first_pass = false;
+bool get_demo_parsed_first_pass() { return demo_parsed_first_pass; }
+void set_demo_parsed_first_pass(bool b) { demo_parsed_first_pass = b; }
+
+//file to write the index of newFrames to during first pass
+bool make_dump_file = false;
+std::ofstream dump_newFrames;
+std::ofstream *get_ofstream_dump_newFrames() { return &dump_newFrames; }
+
+//index of newFrames is written to memory anyway
+std::vector<long> demo_newFrame_offsets;
+
+// allows to activate/deactivate the original timing method
+// it needs to be deactivated when jumping from one demo frame to another, other wise doing so will take the same time as watching the demo
+bool should_sandbag_playback = true;
+bool get_should_sandbag_playback() { return should_sandbag_playback; }
+void set_should_sandbag_playback(bool b) { should_sandbag_playback = b; }
+
+// this is for doing the first pass of the demo, only reading offset, whithout effect on the game physics
+bool DemoRead_parse_only = false;
+void set_DemoRead_parse_only(bool b) { DemoRead_parse_only = b; }
+
+// global variable which will be updated with the content of hackDemoStartFrame.txt
+// will be used to start the demo from there
+int wanted_start_frame;
+
+// reconstruct all the demo causality up until the wanted frame. 
+// Giving an offset will computed another frame relatively to the current one
+// Giving zero will in fact reload hackDemoStartFrame.txt 
 void demo_jump_to_frame(int val) { //val should be +1 or -1 ; or 0 for reset
 
-  if (val == 0) {
-    demo_offsets.resize(demo_wanted_offset_index+1); //so we pushback from this state
-    demo_wanted_offset_index = -1;
+  //guard
+  if (demo_newFrame_offsets.size() == 0) {
+
+    std::ofstream message;
+    message.open("message.txt", std::ios_base::app);
+    message << "WARNING the first pass found 0 newFrames\n";
+    message.close();
     return;
   }
 
-  demo_wanted_offset_index += val;
 
-  if (demo_wanted_offset_index < 0) {
-    demo_wanted_offset_index = demo_offsets.size() - 1;
+  if (val == 0) { //reset of wanted_start_frame
+    std::ifstream start_demo_on_wanted_frame;
+    start_demo_on_wanted_frame.open("hackDemoStartFrame.txt");
+
+    if (start_demo_on_wanted_frame) {
+
+      start_demo_on_wanted_frame >> wanted_start_frame;
+      start_demo_on_wanted_frame.close();
+    }
+
+  } else {
+
+    return; // for clean git push lets disable faulty mechanics
+    wanted_start_frame += val;  // +1 or -1
   }
 
-  if (demo_wanted_offset_index >= demo_offsets.size()) {
-    demo_wanted_offset_index = demo_offsets.size() - 1;
+  // clamping
+  if (wanted_start_frame >= demo_newFrame_offsets.size()) {
+    wanted_start_frame = demo_newFrame_offsets.size() - 1;
+  }
+  if (wanted_start_frame < 0) {
+    wanted_start_frame = 0;
   }
 
+
+  // back to frame 1
+  cfseek(Demo_cfp, demo_newFrame_offsets[0], SEEK_SET); 
+
+  // reconstruct all causality from the start
+  set_demo_eof(false);
+  set_DemoRead_parse_only(false);
+  set_should_sandbag_playback(false);
+  //demo_current_frame = 0;
+
+  for (int i = 0; i < wanted_start_frame; i++) {
+
+    DemoFrame();
+  }
+
+  set_should_sandbag_playback(true);
 }
-    //---------------------
+//---------------------
+
+
 
 // Prompts user for filename and starts recording if successful
 void DemoToggleRecording() {
@@ -586,9 +667,22 @@ void DemoWriteObjCreate(uint8_t type, uint16_t id, int roomnum, vector *pos, con
 #define MAX_COOP_TURRETS 400
 extern float turret_holder[MAX_COOP_TURRETS];
 
-void DemoWriteTurretChanged(uint16_t objnum) { Demo_turretchanged[objnum] = true; }
+void DemoWriteTurretChanged(uint16_t objnum) {  
+  Demo_turretchanged[objnum] = true;   //islide : you don't write anything ??
+}
 
 void DemoReadTurretChanged(void) {
+
+  //skipping
+  if (DemoRead_parse_only) {
+  
+    cfseek(Demo_cfp, 10, SEEK_CUR);
+    uint16_t num_turrets = cf_ReadShort(Demo_cfp);
+    cfseek(Demo_cfp, 4 * num_turrets, SEEK_CUR);
+    return;
+  } 
+
+  //reading
   multi_turret multi_turret_info;
   int objnum;
   uint16_t num_turrets;
@@ -597,16 +691,20 @@ void DemoReadTurretChanged(void) {
 
   do_time = cf_ReadFloat(Demo_cfp);
   int16_t old_objnum = cf_ReadShort(Demo_cfp);
-  objnum = Demo_obj_map[old_objnum];
-
   turr_time = cf_ReadFloat(Demo_cfp);
   num_turrets = cf_ReadShort(Demo_cfp);
+
   multi_turret_info.keyframes = (float *)&turret_holder;
   multi_turret_info.num_turrets = num_turrets;
+
   for (int i = 0; i < num_turrets; i++) {
     if (MAX_COOP_TURRETS > i)
       multi_turret_info.keyframes[i] = cf_ReadFloat(Demo_cfp);
   }
+
+  //acting
+
+  objnum = Demo_obj_map[old_objnum];
 
   if (Objects[objnum].type != OBJ_NONE) {
     ObjSetTurretUpdate(objnum, &multi_turret_info);
@@ -636,6 +734,15 @@ void DemoWriteObjAnimChanged(uint16_t objnum) {
 }
 
 void DemoReadObjAnimChanged(void) {
+
+  //skipping
+   if (DemoRead_parse_only) { 
+
+     cfseek(Demo_cfp, 25, SEEK_CUR);
+     return;
+   }
+
+  //reading
   custom_anim multi_anim_info;
   int objnum;
   float changetime;
@@ -650,6 +757,8 @@ void DemoReadObjAnimChanged(void) {
   multi_anim_info.max_speed = cf_ReadFloat(Demo_cfp);
   multi_anim_info.flags = cf_ReadByte(Demo_cfp);
   multi_anim_info.anim_sound_index = cf_ReadShort(Demo_cfp);
+
+  // acting
 
   if (Objects[objnum].type != OBJ_NONE) {
     ObjSetAnimUpdate(objnum, &multi_anim_info);
@@ -667,12 +776,24 @@ void DemoWriteKillObject(object *hit_obj, object *killer, float damage, int deat
 }
 
 void DemoReadKillObject(void) {
+
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 18, SEEK_CUR);
+    return;
+  }
+
+  //reading
   int16_t hit_objnum = cf_ReadShort(Demo_cfp);
   int16_t killer = cf_ReadShort(Demo_cfp);
   float damage = cf_ReadFloat(Demo_cfp);
   int death_flags = cf_ReadInt(Demo_cfp);
   float delay = cf_ReadFloat(Demo_cfp);
   int16_t seed = cf_ReadShort(Demo_cfp);
+
+  // acting
 
   if (!(IS_GENERIC(Objects[hit_objnum].type) || (Objects[hit_objnum].type == OBJ_DOOR)))
     return; // bail if invalid object type
@@ -689,9 +810,21 @@ void DemoWritePlayerDeath(object *player, bool melee, int fate) {
 }
 
 void DemoReadPlayerDeath(void) {
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 7, SEEK_CUR);
+    return;
+  }
+
+  //reading
   int16_t playernum = cf_ReadShort(Demo_cfp);
   uint8_t melee = cf_ReadByte(Demo_cfp);
   int fate = cf_ReadInt(Demo_cfp);
+
+  // acting
+
   InitiatePlayerDeath(&Objects[playernum], melee ? true : false, fate);
 }
 
@@ -702,9 +835,20 @@ void DemoWrite2DSound(int16_t soundidx, float volume) {
 }
 
 void DemoRead2DSound(void) {
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 6, SEEK_CUR);
+    return;
+  }
+
+
+  //reading
   int soundidx = cf_ReadShort(Demo_cfp);
   float volume = cf_ReadFloat(Demo_cfp);
 
+  // acting
   Sound_system.Play2dSound(soundidx, volume);
 }
 
@@ -716,15 +860,22 @@ void DemoWrite3DSound(int16_t soundidx, uint16_t objnum, int priority, float vol
 }
 
 void DemoRead3DSound(void) {
-  int objnum;
-  int16_t soundidx;
-  float volume;
 
-  objnum = cf_ReadShort(Demo_cfp);
+  // skipping
+  if (DemoRead_parse_only) {
 
-  soundidx = cf_ReadShort(Demo_cfp);
-  volume = cf_ReadFloat(Demo_cfp);
+    cfseek(Demo_cfp, 8, SEEK_CUR);
+    return;
+  }
 
+
+  //reading
+  int objnum = cf_ReadShort(Demo_cfp);
+  int16_t soundidx = cf_ReadShort(Demo_cfp);
+  float volume = cf_ReadFloat(Demo_cfp);
+
+
+  // acting
   Sound_system.Play3dSound(soundidx, &Objects[objnum], volume);
 }
 
@@ -766,6 +917,30 @@ int DemoPlaybackFile(const std::filesystem::path &filename) {
     DoMessageBox(TXT_ERROR, TXT_BADDEMOFILE, MSGBOX_OK, UICOL_WINDOW_TITLE, UICOL_TEXT_NORMAL);
     return 0;
   }
+
+  //  islide ----------------------------
+
+  demo_newFrame_offsets.clear();
+  set_demo_parsed_first_pass(false);
+
+  set_demo_eof(false);
+  set_DemoRead_parse_only(true);
+  set_should_sandbag_playback(false);
+  //demo_current_frame = 0;
+  
+  int count_frames_before_abort = 0; 
+  while (!get_demo_eof() && (count_frames_before_abort < 123456)) {
+
+    DemoFrame();
+    count_frames_before_abort++;
+  }  
+
+  demo_jump_to_frame(0); // beruilds causality from start to wanted frame in hackDemoStartFrame
+  
+  //v teleports you fast but loses causality of past events
+  //cfseek(Demo_cfp, demo_newFrame_offsets[wanted_start_frame], SEEK_SET);
+  
+  //----------------------------
 
   return 1;
 }
@@ -928,28 +1103,65 @@ int DemoReadHeader() {
 }
 
 void DemoReadObj() {
+
+  //skipping
+  if (DemoRead_parse_only) {
+
+    int16_t objnum = cf_ReadShort(Demo_cfp);
+    cfseek(Demo_cfp, 54-2, SEEK_CUR);
+    if (objnum == 0) {
+      cfseek(Demo_cfp, 4, SEEK_CUR);
+    }
+
+    return;
+  }
+
+  // reading
   int16_t objnum;
   object *obj;
   vector pos;
   matrix orient;
+  int32_t player_new_flags; // islide
   ASSERT(Demo_flags == DF_PLAYBACK);
   objnum = cf_ReadShort(Demo_cfp);
-
-  obj = &Objects[Demo_obj_map[objnum]];
-  // ASSERT(obj->type!=OBJ_NONE);
 
   int roomnum = cf_ReadInt(Demo_cfp);
   gs_ReadVector(Demo_cfp, pos);
   gs_ReadMatrix(Demo_cfp, orient);
-  if (obj->type == OBJ_PLAYER || obj->type == OBJ_OBSERVER) {
-    if (obj->id != Player_num)
-      is_multi_demo = true;
-    Players[obj->id].flags = cf_ReadInt(Demo_cfp);
 
-    if (!(Players[obj->id].flags & PLAYER_FLAGS_DEAD))
-      ResetPersistentHUDMessage();
+  //islide - trying to compensate by using only objnum, assuming objnum=0 => player, and single player mode
+  if (objnum == 0) {  
+    player_new_flags = cf_ReadInt(Demo_cfp); //TODO : just patch the demo writing system and have it pad an int
   }
-  // if((!((obj->flags&OF_DYING)||(obj->flags&OF_EXPLODING)||(obj->flags&OF_DEAD)))&&obj->type!=255)
+
+  if (false) { // islide : don't access Demo_obj_map at 1st pass when it's empty
+  
+
+    obj = &Objects[Demo_obj_map[objnum]];
+    // ASSERT(obj->type!=OBJ_NONE);
+
+    if (obj->type == OBJ_PLAYER || obj->type == OBJ_OBSERVER) {
+      if (obj->id != Player_num)
+        is_multi_demo = true;
+
+      player_new_flags = cf_ReadInt(Demo_cfp); // islide
+    }
+    // if((!((obj->flags&OF_DYING)||(obj->flags&OF_EXPLODING)||(obj->flags&OF_DEAD)))&&obj->type!=255)
+  }
+
+
+
+  // acting
+   obj = &Objects[Demo_obj_map[objnum]];
+
+  if (obj->type == OBJ_PLAYER || obj->type == OBJ_OBSERVER) {
+
+    Players[obj->id].flags = player_new_flags;
+
+    if (!(player_new_flags & PLAYER_FLAGS_DEAD)) {
+      ResetPersistentHUDMessage();
+    }
+  }
 
   if (obj->type != OBJ_NONE) {
     obj->mtype.phys_info.velocity = vector{};
@@ -962,10 +1174,17 @@ void DemoReadObj() {
 }
 
 void DemoReadHudMessage() {
+
+  //reading
   char msg[HUD_MESSAGE_LENGTH];
   int color = cf_ReadInt(Demo_cfp);
   uint8_t blink = cf_ReadByte(Demo_cfp);
   cf_ReadString(msg, HUD_MESSAGE_LENGTH, Demo_cfp);
+
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
 
   if (color) {
     AddColoredHUDMessage(color, msg);
@@ -977,6 +1196,16 @@ void DemoReadHudMessage() {
 }
 
 void DemoReadWeaponFire() {
+
+  
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 38, SEEK_CUR); //24 ??
+    return;
+  }
+
+  //reading
   vector pos, dir;
   float gametime;
   uint32_t uniqueid;
@@ -1006,9 +1235,6 @@ void DemoReadWeaponFire() {
 
   gametime = cf_ReadFloat(Demo_cfp);
   int16_t old_objnum = cf_ReadShort(Demo_cfp);
-  objnum = Demo_obj_map[old_objnum];
-  obj = &Objects[objnum];
-  ASSERT(Objects[objnum].type != OBJ_NONE);
 
   uniqueid = cf_ReadInt(Demo_cfp);
   gs_ReadVector(Demo_cfp, pos);
@@ -1020,6 +1246,13 @@ void DemoReadWeaponFire() {
   int16_t gunnum = cf_ReadShort(Demo_cfp);
   ASSERT(uniqueid != 0xffffffff);
   ASSERT(dir != vector{});
+
+
+  // acting
+
+  objnum = Demo_obj_map[old_objnum];
+  obj = &Objects[objnum];
+  ASSERT(Objects[objnum].type != OBJ_NONE);
 
   // This is a hack for the napalm, omega & vauss to prevent making files incompatible
   if ((obj->type == OBJ_PLAYER) && (obj->id != Player_num)) {
@@ -1134,6 +1367,22 @@ void DemoReadWeaponFire() {
 }
 
 void DemoReadObjCreate() {
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    uint8_t type = cf_ReadByte(Demo_cfp);
+    uint8_t use_orient = cf_ReadByte(Demo_cfp);
+    if (use_orient) {
+      cfseek(Demo_cfp, 24 + 36, SEEK_CUR);
+    } else {
+      cfseek(Demo_cfp, 24, SEEK_CUR);
+    }
+    
+    return;
+  }
+
+  // reading
   // float gametime;
   uint8_t type;
   uint8_t use_orient;
@@ -1152,6 +1401,8 @@ void DemoReadObjCreate() {
   parent_handle = cf_ReadInt(Demo_cfp);
   if (use_orient)
     gs_ReadMatrix(Demo_cfp, orient);
+
+  // acting
 
   // xlate id to new id.
   switch (type) {
@@ -1201,12 +1452,18 @@ void DemoFrame() {
       DoScreenshot();
     }
     // This code slows down demo playback
-    if (!Demo_play_fast) {
 
-      float tdelta = timer_GetTime();
+    if (get_should_sandbag_playback()) { // islide 
+      // this should be on for normal playback so it plays at correct speed
+      // but should be off during first pass so it can be done way quicker
 
-      while ((Gametime + Demo_frame_ofs) < Demo_next_frame) {
-        Demo_frame_ofs = timer_GetTime() - tdelta;
+      if (!Demo_play_fast) {
+
+        float tdelta = timer_GetTime();
+
+        while ((Gametime + Demo_frame_ofs) < Demo_next_frame) {
+          Demo_frame_ofs = timer_GetTime() - tdelta;
+        }
       }
     }
   } else {
@@ -1214,32 +1471,21 @@ void DemoFrame() {
     Demo_frame_time = 0;
     Demo_first_frame = false;
   }
-  int exit_loop = 0;
 
 
   //------------------------------------
-  if (demo_wanted_offset_index != -1) {
+  // islide
+  if (make_dump_file) {
 
-    cfseek(Demo_cfp, demo_offsets[demo_wanted_offset_index], SEEK_SET);
-  } else {
-  
-    demo_offsets.push_back(cftell(Demo_cfp));
+    std::ofstream *dump_newFrames = get_ofstream_dump_newFrames();
+    dump_newFrames->open("dump_newFrames.txt", std::ios_base::app);
+    (*dump_newFrames) << "," << DemoLastOpcode;
+    dump_newFrames->close(); // grrr open/close :(
   }
- 
-   
-
-  if (false) {
-
-    position_old = cftell(Demo_cfp); // islide
-    std::ofstream dump_demo_offsets;
-    dump_demo_offsets.open("dump_demo_offsets.txt", std::ios::app);
-    dump_demo_offsets << position_old << "\n";
-    dump_demo_offsets.close();
-  }
-
-  
   //------------------------------------
+
   
+  int exit_loop = 0; 
   do {
     // Read one opcode at a time, and dispatch the proper function to read the rest of the data
     // Keep going until we hit a new frame
@@ -1247,6 +1493,23 @@ void DemoFrame() {
     try {
       opcode = cf_ReadByte(Demo_cfp);
     } catch (...) {
+     
+      // islide
+      //-----------------
+      set_demo_eof(true);
+      if (!get_demo_parsed_first_pass()) { // if there was no 1pass before, then this is the first pass
+        set_demo_parsed_first_pass(true);
+        return;
+      }
+
+      std::ofstream message;
+      message.open("message.txt", std::ios_base::app);
+      message << "demo abort in trycatch\n";
+      message.close();
+      //-----------------
+
+
+
       // End of file, so we're done playing the demo
       LOG_INFO << "End of demo file!";
       Old_demo_fname = Demo_fname;
@@ -1260,6 +1523,7 @@ void DemoFrame() {
       }
       return;
     }
+
     switch (opcode) {
     case DT_NEW_FRAME:
       DemoReadNewFrame();
@@ -1341,6 +1605,21 @@ void DemoFrame() {
       DemoReadObjLifeLeft();
       break;
     default:
+
+      //islide
+      //-----------------
+      set_demo_eof(true);
+      if (!get_demo_parsed_first_pass()) { // if there was no 1pass before, then this is the first pass
+        set_demo_parsed_first_pass(true);
+        return;
+      }
+
+      std::ofstream message;
+      message.open("message.txt", std::ios_base::app);
+      message << "demo abort in default switch case\n";
+      message.close();
+      //---------------
+
       LOG_ERROR.printf("ERROR! Unknown opcode in demo file!(%d) last code: %d", opcode, DemoLastOpcode);
       DemoAbort();
       if (Demo_looping) {
@@ -1364,9 +1643,18 @@ void DemoWriteCinematics(uint8_t *data, uint16_t len) {
 }
 
 void DemoReadCinematics() {
+
+
   uint8_t buffer[1500];
   uint16_t len = cf_ReadShort(Demo_cfp);
+
   cf_ReadBytes(buffer, len, Demo_cfp);
+
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
+
   LOG_INFO << "Reading Cinematic data from demo file.";
   Cinematic_DoDemoFileData(buffer);
 }
@@ -1386,18 +1674,34 @@ void DemoWritePowerup(uint8_t *data, uint16_t len) {
 extern void MultiDoMSafeFunction(uint8_t *data);
 
 void DemoReadMSafe() {
+
+
   uint8_t buffer[1500];
   uint16_t len = cf_ReadShort(Demo_cfp);
   cf_ReadBytes(buffer, len, Demo_cfp);
+
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
+
   MultiDoMSafeFunction(buffer);
 }
 
 extern void MultiDoMSafePowerup(uint8_t *data);
 
 void DemoReadPowerups() {
+
+
   uint8_t buffer[1500];
   uint16_t len = cf_ReadShort(Demo_cfp);
   cf_ReadBytes(buffer, len, Demo_cfp);
+
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
+
   MultiDoMSafePowerup(buffer);
 }
 extern void collide_player_and_weapon(object *playerobj, object *weapon, vector *collision_point,
@@ -1416,6 +1720,16 @@ void DemoWriteCollidePlayerWeapon(object *playerobj, object *weapon, vector *col
 }
 
 void DemoReadCollidePlayerWeapon(void) {
+
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 29, SEEK_CUR);
+    return;
+  }
+
+
   vector collision_p;
   vector collision_n;
   bool f_reverse_normal;
@@ -1426,6 +1740,8 @@ void DemoReadCollidePlayerWeapon(void) {
   gs_ReadVector(Demo_cfp, collision_n);
   uint8_t b = cf_ReadByte(Demo_cfp);
   f_reverse_normal = b ? true : false;
+
+  // acting
 
   real_weapnum = Demo_obj_map[wep_objnum];
   if (real_weapnum != 65535) {
@@ -1447,6 +1763,15 @@ void DemoWriteCollideGenericWeapon(object *robotobj, object *weapon, vector *col
 }
 
 void DemoReadCollideGenericWeapon(void) {
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 29, SEEK_CUR);
+
+    return;
+  }
+
   vector collision_p;
   vector collision_n;
   bool f_reverse_normal;
@@ -1457,6 +1782,8 @@ void DemoReadCollideGenericWeapon(void) {
   gs_ReadVector(Demo_cfp, collision_n);
   uint8_t b = cf_ReadByte(Demo_cfp);
   f_reverse_normal = b ? true : false;
+
+  // acting
 
   real_weapnum = Demo_obj_map[wep_objnum];
   if (real_weapnum != 65535) {
@@ -1504,18 +1831,57 @@ void DemoAbort(bool deletefile) {
 }
 int Debugme = 1;
 
+
+bool should_overwrite_old_dump_file = true;
+//int demo_current_frame = 0;
 void DemoReadNewFrame(void) {
+
+  //----------------------------------
+  //demo_current_frame++;
+  
+  // islide : dumping the offset
+  long file_pos = cftell(Demo_cfp) -1 ; //minus opcode
+
+  if (get_demo_parsed_first_pass() == false) {
+    demo_newFrame_offsets.push_back(file_pos); 
+  }
+  
+
+  if (make_dump_file) {
+
+    if (should_overwrite_old_dump_file) {
+
+      dump_newFrames.open("dump_newFrames.txt");
+      should_overwrite_old_dump_file = false;
+
+    } else {
+
+      dump_newFrames.open("dump_newFrames.txt", std::ios_base::app);
+    }
+
+    dump_newFrames << "\n " << file_pos;
+    dump_newFrames.close(); // grrr open/close :(
+  }
+
+  
+  //----------------------------------
+
+  //reading
+
   // float our_frametime;
+  float Demo_next_frame_new = cf_ReadFloat(Demo_cfp);
+  float Demo_frame_new = cf_ReadFloat(Demo_cfp);
+
+
+  // acting
+
   Gametime = Demo_next_frame;
   Frametime = Demo_frame_time;
 
-  Demo_next_frame = cf_ReadFloat(Demo_cfp);
-  Demo_frame_time = cf_ReadFloat(Demo_cfp);
+  Demo_next_frame = Demo_next_frame_new;
+  Demo_frame_time = Demo_frame_new;
 
-  //islide
-  //position_old = Demo_cfp->position;
-
-  DemoFrameCount++;
+  DemoFrameCount++;   //islide : unused ?
 }
 
 void DemoWriteAttachObjRad(object *parent, char parent_ap, object *child, float rad) {
@@ -1527,17 +1893,32 @@ void DemoWriteAttachObjRad(object *parent, char parent_ap, object *child, float 
 }
 
 void DemoReadAttachObjRad(void) {
-  int16_t old_objnum;
+
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 9, SEEK_CUR);
+    return;
+  }
+
+
+  int16_t old_objnum_parent;
+  int16_t old_objnum_child;
   int16_t parent_num;
   int16_t child_num;
   char parent_ap;
   float rad;
-  old_objnum = cf_ReadShort(Demo_cfp);
-  parent_num = Demo_obj_map[old_objnum];
+  old_objnum_parent = cf_ReadShort(Demo_cfp);
   parent_ap = cf_ReadByte(Demo_cfp);
-  old_objnum = cf_ReadShort(Demo_cfp);
-  child_num = Demo_obj_map[old_objnum];
+  old_objnum_child = cf_ReadShort(Demo_cfp);
   rad = cf_ReadFloat(Demo_cfp);
+
+  // acting
+
+  parent_num = Demo_obj_map[old_objnum_parent];
+  child_num = Demo_obj_map[old_objnum_child];
+
   AttachObject(&Objects[parent_num], parent_ap, &Objects[child_num], rad);
 }
 
@@ -1551,19 +1932,32 @@ void DemoWriteAttachObj(object *parent, char parent_ap, object *child, char chil
 }
 
 void DemoReadAttachObj(void) {
-  int16_t old_objnum;
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 7, SEEK_CUR);
+    return;
+  }
+
+  int16_t old_objnum_parent;
+  int16_t old_objnum_child;
   int16_t parent_num;
   int16_t child_num;
   char parent_ap;
   char child_ap;
   bool f_aligned;
-  old_objnum = cf_ReadShort(Demo_cfp);
-  parent_num = Demo_obj_map[old_objnum];
+  old_objnum_parent = cf_ReadShort(Demo_cfp);
   parent_ap = cf_ReadByte(Demo_cfp);
-  old_objnum = cf_ReadShort(Demo_cfp);
-  child_num = Demo_obj_map[old_objnum];
+  old_objnum_child = cf_ReadShort(Demo_cfp);
   child_ap = cf_ReadByte(Demo_cfp);
   f_aligned = cf_ReadByte(Demo_cfp) ? true : false;
+
+  // acting
+
+  parent_num = Demo_obj_map[old_objnum_parent];
+  child_num = Demo_obj_map[old_objnum_child];
+
   AttachObject(&Objects[parent_num], parent_ap, &Objects[child_num], child_ap, f_aligned);
 }
 
@@ -1573,8 +1967,16 @@ void DemoWriteUnattachObj(object *child) {
 }
 
 void DemoReadUnattachObj(void) {
+
   int16_t old_objnum = cf_ReadShort(Demo_cfp);
+  
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
+
   int16_t unattach_objnum = Demo_obj_map[old_objnum];
+
   UnattachFromParent(&Objects[unattach_objnum]);
 }
 
@@ -1657,9 +2059,21 @@ void DemoWriteObjWeapFireFlagChanged(int16_t objnum) {
 }
 
 void DemoReadObjWeapFireFlagChanged(void) {
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 3, SEEK_CUR);
+    return;
+  }
+
   int16_t oldobjnum = cf_ReadShort(Demo_cfp);
+  uint8_t next_byte = cf_ReadByte(Demo_cfp); //islide
+
+  // acting
   int16_t newobjnum = Demo_obj_map[oldobjnum];
-  Objects[newobjnum].weapon_fire_flags = cf_ReadByte(Demo_cfp);
+
+  Objects[newobjnum].weapon_fire_flags = next_byte;
 }
 
 void DemoWritePlayerInfo(void) {
@@ -1712,26 +2126,60 @@ void DemoWritePlayerInfo(void) {
 }
 
 void DemoReadPlayerInfo(void) {
-  int i;
-  Players[Player_num].energy = cf_ReadShort(Demo_cfp);                  // cf_ReadFloat(Demo_cfp);
-  Objects[Players[Player_num].objnum].shields = cf_ReadShort(Demo_cfp); // cf_ReadFloat(Demo_cfp);
-  for (i = 0; i < MAX_PLAYER_WEAPONS; i++) {
-    Players[Player_num].weapon_ammo[i] = cf_ReadShort(Demo_cfp);
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 4 + (2 * MAX_PLAYER_WEAPONS) + 20 , SEEK_CUR);
+    return;
   }
+
+  //islide : separating read and act 
+  int i;
+  uint16_t energy = cf_ReadShort(Demo_cfp);  // cf_ReadFloat(Demo_cfp);
+  uint16_t shields = cf_ReadShort(Demo_cfp); // cf_ReadFloat(Demo_cfp);
+  uint16_t weapon_ammo[MAX_PLAYER_WEAPONS] = {};
+  for (i = 0; i < MAX_PLAYER_WEAPONS; i++) {
+
+    weapon_ammo[i] = cf_ReadShort(Demo_cfp);
+  }
+  int weap0_index = cf_ReadInt(Demo_cfp);
+  int weap1_index = cf_ReadInt(Demo_cfp);
+  int weapon_flags = cf_ReadInt(Demo_cfp);
+  float ab_time_left = cf_ReadFloat(Demo_cfp);
+  float new_fov = cf_ReadFloat(Demo_cfp);
+
+  // acting
+
+  Players[Player_num].energy = energy;
+  Objects[Players[Player_num].objnum].shields = shields;
+
+  for (i = 0; i < MAX_PLAYER_WEAPONS; i++) {
+    Players[Player_num].weapon_ammo[i] = weapon_ammo[i];
+  }
+
   // Players[Player_num].weapon[0].firing_time = cf_ReadFloat(Demo_cfp);
-  Players[Player_num].weapon[0].index = cf_ReadInt(Demo_cfp);
+  Players[Player_num].weapon[0].index = weap0_index;
   // Players[Player_num].weapon[0].sound_handle = cf_ReadInt(Demo_cfp);
   // Players[Player_num].weapon[1].firing_time = cf_ReadFloat(Demo_cfp);
-  Players[Player_num].weapon[1].index = cf_ReadInt(Demo_cfp);
+  Players[Player_num].weapon[1].index = weap1_index;
   // Players[Player_num].weapon[1].sound_handle = cf_ReadInt(Demo_cfp);
-  Players[Player_num].weapon_flags = cf_ReadInt(Demo_cfp);
-  Players[Player_num].afterburn_time_left = cf_ReadFloat(Demo_cfp);
+  Players[Player_num].weapon_flags = weapon_flags;
+  Players[Player_num].afterburn_time_left = ab_time_left;
 
+  /*
   if (Viewer_object == Player_object) {
+
     Render_FOV = cf_ReadFloat(Demo_cfp);
   } else {
-    cf_ReadFloat(Demo_cfp);
+    cf_ReadFloat(Demo_cfp); //padding
   }
+  */
+
+  if (Viewer_object == Player_object) {
+
+    Render_FOV = new_fov;
+  } 
 }
 
 void DemoWritePersistantHUDMessage(ddgr_color color, int x, int y, float time, int flags, int sound_index, char *msg) {
@@ -1747,6 +2195,16 @@ void DemoWritePersistantHUDMessage(ddgr_color color, int x, int y, float time, i
 }
 
 void DemoReadPersistantHUDMessage() {
+
+  // skipping
+  if (DemoRead_parse_only) {
+
+    cfseek(Demo_cfp, 24, SEEK_CUR);
+    int msglen = cf_ReadShort(Demo_cfp);
+    cfseek(Demo_cfp, msglen, SEEK_CUR);
+    return;
+  }
+
   ddgr_color color;
   int x;
   int y;
@@ -1764,6 +2222,9 @@ void DemoReadPersistantHUDMessage() {
   int msglen = cf_ReadShort(Demo_cfp);
   fmt = mem_rmalloc<char>(msglen);
   cf_ReadBytes((uint8_t *)fmt, msglen, Demo_cfp);
+
+  // acting
+
   AddPersistentHUDMessage(color, x, y, time, flags, sound_index, fmt);
   mem_free(fmt);
 }
@@ -1774,7 +2235,14 @@ void DemoWriteSetObjDead(object *obj) {
 }
 
 void DemoReadSetObjDead() {
+
   int16_t oldobjnum = cf_ReadShort(Demo_cfp);
+  
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
+
   int16_t local_objnum = Demo_obj_map[oldobjnum];
 
   Objects[local_objnum].flags |= OF_SERVER_SAYS_DELETE;
@@ -1804,6 +2272,7 @@ void DemoWritePlayerBalls(int pnum) {
 }
 
 void DemoReadPlayerBalls(void) {
+
   int slot = cf_ReadShort(Demo_cfp);
   int num_balls = cf_ReadByte(Demo_cfp);
   float speed;
@@ -1824,6 +2293,11 @@ void DemoReadPlayerBalls(void) {
     memset(r, 0, sizeof(float) * 4);
     memset(g, 0, sizeof(float) * 4);
     memset(b, 0, sizeof(float) * 4);
+  }
+
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
   }
 
   PlayerSetRotatingBall(slot, num_balls, speed, r, g, b);
@@ -1851,34 +2325,67 @@ void DemoWritePlayerTypeChange(int slot, bool stop_observing, int observer_mode,
 }
 
 void DemoReadPlayerTypeChange(void) {
+
   int slot;
   int type;
+  int obs_mode;
+  int objnum = -1;
 
   slot = cf_ReadByte(Demo_cfp);
   type = cf_ReadByte(Demo_cfp);
 
+  //islide
+  bool act_PlayerStopObserving = false;
+  bool act_MultiMakePlayerReal = false;
+  bool act_MultiMakePlayerGhost = false;
+  bool act_PlayerSwitchToObserver = false;
+
   switch (type) {
   case OBJ_PLAYER:
     if (cf_ReadByte(Demo_cfp))
-      PlayerStopObserving(slot);
+      // PlayerStopObserving(slot);
+      act_PlayerStopObserving = true;
     else
-      MultiMakePlayerReal(slot);
+      // MultiMakePlayerReal(slot);
+      act_MultiMakePlayerReal = true;
     break;
   case OBJ_GHOST:
-    MultiMakePlayerGhost(slot);
+    //MultiMakePlayerGhost(slot);
+    act_MultiMakePlayerGhost = true;
     break;
   case OBJ_OBSERVER: {
-    int obs_mode = cf_ReadInt(Demo_cfp);
-    int objnum = -1;
+    obs_mode = cf_ReadInt(Demo_cfp);
 
     if (obs_mode == OBSERVER_MODE_PIGGYBACK) {
       objnum = Demo_obj_map[cf_ReadInt(Demo_cfp)];
     }
 
-    PlayerSwitchToObserver(slot, obs_mode, objnum);
+    //PlayerSwitchToObserver(slot, obs_mode, objnum);
+    act_PlayerSwitchToObserver = true;
 
   } break;
   };
+
+
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
+
+  //islide
+  if (act_PlayerStopObserving) {
+    PlayerStopObserving(slot);
+  }
+  if (act_MultiMakePlayerReal) {
+    MultiMakePlayerReal(slot);
+  }
+  if (act_MultiMakePlayerGhost) {
+    MultiMakePlayerGhost(slot);
+  }
+  if (act_PlayerSwitchToObserver) {
+    PlayerSwitchToObserver(slot, obs_mode, objnum);
+  }
+
 }
 
 void DemoWriteObjLifeLeft(object *obj) {
@@ -1896,12 +2403,27 @@ void DemoWriteObjLifeLeft(object *obj) {
 }
 
 void DemoReadObjLifeLeft(void) {
+
   int16_t oldobjnum = cf_ReadShort(Demo_cfp);
+  uint8_t next_byte = cf_ReadByte(Demo_cfp);
+  float lifeleft;
+
+  if (next_byte) {
+
+    lifeleft = cf_ReadFloat(Demo_cfp);
+  }
+
+  // acting
+  if (DemoRead_parse_only) { // islide
+    return;
+  }
+
   int16_t local_objnum = Demo_obj_map[oldobjnum];
 
-  if (cf_ReadByte(Demo_cfp)) {
+  if (next_byte) {
     Objects[local_objnum].flags |= OF_USES_LIFELEFT;
-    Objects[local_objnum].lifeleft = cf_ReadFloat(Demo_cfp);
+    Objects[local_objnum].lifeleft = lifeleft;
+
   } else {
     Objects[local_objnum].flags &= ~OF_USES_LIFELEFT;
     Objects[local_objnum].lifeleft = 0;

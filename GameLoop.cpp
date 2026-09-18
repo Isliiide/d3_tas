@@ -1243,6 +1243,10 @@ void ProcessGuidebotKeys(int key) {
 
 void ProcessNormalKey(int key) {
   // First do keys that work normally even when dead
+
+
+  std::ofstream message;
+
   switch (key) {
 
     // ingnore the modifier keys
@@ -1289,7 +1293,16 @@ void ProcessNormalKey(int key) {
        return;
        
     case KEY_M: //to playback a demo, and then exit the playback and be in tha game engine in the same state
+
       if (Demo_flags == DF_PLAYBACK) {
+        
+        //Game_interface_mode = GAME_INTERFACE;
+        //Timedemo_frame = -1;
+        //Game_paused = false;
+        //ResumeControls();
+        //SetObjectControlType(Player_object, CT_FLYING);
+        // ^ what flag to regain control of the ship when its paralyzed by intro cutscene ????
+
         Demo_flags = DF_NONE;
       }
         
@@ -1441,6 +1454,8 @@ void ProcessNormalKey(int key) {
       return;
     }
   }
+
+
   if (Demo_flags == DF_PLAYBACK) {
     switch (key) {
     case KEY_C: {
@@ -1490,11 +1505,11 @@ void ProcessNormalKey(int key) {
       break;
     case KEY_RIGHT:
       demo_jump_to_frame(1);
-      Demo_do_one_frame = true;
+      //Demo_do_one_frame = true;
       break;
     case KEY_LEFT:
       demo_jump_to_frame(-1);
-      Demo_do_one_frame = true;
+      //Demo_do_one_frame = true;
       break;
     case KEY_CTRLED + KEY_LEFT: {
       std::filesystem::path sztmp = Demo_fname;
@@ -2823,6 +2838,11 @@ void CalcFrameTime(void) {
 
 	
     Frametime = static_cast<float>(current_timer - last_timer) / (1000.0f * slomo_factor);  // / 1000.0f;  // <---- ? islide
+    
+    //////////////////////////////
+    //Frametime = static_cast<float>(16) / (1000.0f * slomo_factor); // islide : making it constant for deterministic play
+    ///////////////////////////////////
+
 
   } else {
     Frametime = 0.0f;
@@ -2954,13 +2974,14 @@ void StartTerrainSound() {
   UpdateTerrainSound();
 }
 
+
+
 // The main loop for D3.  It renders, gets input, etc. for one frame
 extern bool Skip_render_game_frame;
 void GameFrame(void) {
 #ifdef USE_RTP
   INT64 curr_time;
 #endif
-
 
   bool is_game_idle = !Descent->active();
 
@@ -2977,6 +2998,8 @@ void GameFrame(void) {
 
   FVI_counter = 0;
   FVI_room_counter = 0;
+
+
 
 #ifdef _DEBUG
   // Dump networking stats to virtual window
@@ -3051,10 +3074,8 @@ void GameFrame(void) {
 	
 	goto skip_physics_and_goto_render;
     }
-	one_more_step = false;
+    one_more_step = false;
 	
-
-    //islide
 	
     if(skip_loops < skip_factor){ // put a positive number to slow down the physics by that factor
 		
@@ -3169,9 +3190,9 @@ void GameFrame(void) {
   RTP_GETCLOCK(curr_time); // update the current time, since something has happened since ENDFTIME
 #endif
 
-	//islide
-	skip_physics_and_goto_render:
-	skip_loops++;
+  //islide
+  skip_physics_and_goto_render:
+  skip_loops++;
 
 
   if (!is_game_idle) {
