@@ -274,4 +274,14 @@ void set_demo_parsed_first_pass(bool b);
 void set_DemoRead_parse_only(bool b);
 bool get_should_sandbag_playback();
 void set_should_sandbag_playback(bool b);
+
+struct hacked_velocity {
+
+  float vx = 0;
+  float vy = 0;
+  float vz = 0;
+
+};
+
+hacked_velocity get_hacked_velocity();
 #endif
