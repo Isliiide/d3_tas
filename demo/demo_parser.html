@@ -3,13 +3,17 @@
 written by Islide @ decent 3 speedrun.com
 
 known issues :
-- I'm filtering "GrameFrame" hud messages, which should be corrected to "GameFrame" once the game is updated too (why not filter both ;) )
+- I'm filtering "GrameFrame" hud messages, which should be corrected to "GameFrame" once the game is updated too
 - The build of the game I had was writing opcode 0x13 instead of 0x14, hence creating faulty demo files, but the problem isn't due to this parser 
 (problem on lv7 demo files, where this opcode is often used)
-- the method for skipping header bytes and going straight to the recorded demo data may fail on levels not from the original d3 campaign 
-(if the level has a name different than "level2" per say)
+- the method for skipping header bytes and going straight to the recorded demo data may fail on levels not from the original d3 campaign (if the level has a name different than "level2" per say)
 
 the parser hasn't been tested in multiplayer, so there's no garantee it works (especially the assumption that player = obj # 0, which surely only works in single player mode)
+
+
+
+the function DemoWriteAttachObj was writing the wrong opcode (0x13 instead of 0x14), causing trouble with demo playback
+
 */
 </script>
 
@@ -36,7 +40,10 @@ background: #3b3b3b;
  .data_label {
 
 	color: white;
+
 }
+
+
 
 .data_val {
 
@@ -101,11 +108,13 @@ background: #dab764;
 
 	display: grid;
 	grid-template-columns: 140px auto;
+height: 1495px;
+  overflow: hidden;
 }
 
 #graph_titles{
 	display: grid;
-  grid-template-rows: repeat(4, 138px) repeat(4, 25px) 34px  100px  32px repeat(3, 25px) 100px 34px 25px repeat(10, 34px);
+  grid-template-rows: repeat(4, 138px) repeat(4, 25px) 34px  100px  32px repeat(3, 25px) 100px 34px 25px repeat(20, 34px);
 
 }
 
@@ -128,10 +137,15 @@ outline: 1px solid grey;
 	margin-top: 4px;
 }
 
-#graphs {
+#graphs_ret {
   background: #151515;
 width: 100%;
-overflow: scroll;
+overflow-x: scroll;
+  overflow-y: hidden;
+}
+
+#graphs{
+display : grid;
 }
 
 .graph_change {
@@ -181,13 +195,31 @@ top: 0px;
 
 #reticle {
 
-	position: fixed;
+	position: absolute;
 	border-right: 2px dashed white;
 	left: 0px;
 	top: 0px;
-	height: 1000px;
+	height: 1520px;
 	width: 10px;
 	 pointer-events: none;
+}
+
+#reticle_g {
+
+position: relative;
+  border-right: 2px dashed white;
+  left: -148px;
+  top: -1520px;
+  height: 1520;
+  pointer-events: none;
+  display: flex;
+
+}
+
+#reticle_g[locked]{
+
+	border-right: 2px dashed #eecc00;
+
 }
 
 #reticle_y {
@@ -212,12 +244,15 @@ top: 0px;
 <body>
 
 <input id="file_loader" type="file" accept=".dem" onchange="load_file(event.target.files)" ></input>
-<div id="reticle"></div>
 <div id="reticle_y"></div>
 <div id="cood"></div>
 <div id="graph_wrapper">
 	<div id="graph_titles"></div>
-	<div id="graphs"></div>
+	<div id="graphs_ret">
+		
+		<div id="graphs"></div>
+		<div id="reticle_g"></div>
+	</div>
 </div>
 
 </body>
@@ -295,10 +330,7 @@ function load_file(files){
 	globals.create_html = false; 
 
 	function alert_pattern(a){ alert("failed to parse demo file, lacking pattern "+ a);}
-
-	  
 	/*
-	// old pattern matching method
 	var fsm_osiris = new FSM("4F 53 49 52 49 53");
 	var fsm_level = new FSM("6C 65 76 65 6C");
 	//var fsm_a040 = new FSM("A0 40 00 00 90 42");
@@ -323,11 +355,11 @@ function load_file(files){
 		alert_pattern("0xA0400000");
 		return;
 	}
+
 	
 	globals.i = i_a040 -74 ; //+2?
 	*/
 
-	  //method using header info
 	var fsm_02time = new FSM("02 " + globals.header_gametime.join(" "));
 
 	var i_02time = find_first_match(globals.data_view, globals.i, globals.data_view.byteLength, fsm_02time);
@@ -353,6 +385,8 @@ function load_file(files){
 	draw_all_graphs();
 
 	document.querySelector("#file_loader").style.setProperty("background", "#cbf");
+
+
 	return;
 	
 
@@ -617,6 +651,10 @@ console.log("frame_n = "+frame_n);
 	var div_blank = document.createElement("div");
 	div_blank.style.setProperty("height", "300px");
 	document.querySelector("#input_result").appendChild(div_blank);
+
+	var retg = document.querySelector("#reticle_g");
+	retg.setAttribute("locked", 1);
+	retg.style.setProperty("width", (frame_n+148)+"px");
 }
 
 
@@ -706,7 +744,9 @@ function DemoReadHudMessage(){
 	}
 	make_label("HUDmessage");	
 	
-	if((buf.split("GameFrame")[0].length > 0) && (buf.split("GrameFrame")[0].length > 0)){ // if message doesn't start with "GrameFrame" // yes there's a typo
+	if((buf.split("GameFrame")[0].length > 0) && 
+		(buf.split("GrameFrame")[0].length > 0) &&
+		(buf.split("velocity")[0].length > 0)){ // if message doesn't start with "GrameFrame" // yes there's a typo
 
 		if(buf.split("GB:").length != 2){
 			HUDmessages[globals.count_newFrame] = buf;
@@ -755,6 +795,8 @@ function DemoReadObj(){
 	
 	if(obj_num == 0){
 
+		//make_label("room_num");		player_obj_room[gcnf] = read4();
+		
 		make_label("room_num");		player_obj_room_new = read4();
 
 		if(player_obj_room_new != player_obj_room_old){
@@ -897,7 +939,7 @@ function DemoReadPlayerInfo(){
 	make_label("weapon1_idx");	read4();
 	make_label("weapon2_idx");	read4();
 	make_label("weapon_flags");	read4();
-	make_label("afterburner_time_left");	player_afterburner[gcnf] = read4(true);
+	make_label("afterburner_time_left");	player_afterburner[gcnf] = (5-read4(true));
 	make_label("fov");		read4(true);
 	
 }
@@ -1547,6 +1589,10 @@ function draw_graph(h_min, h_max, rescale_h_to, obj_data, color, qs_append_to="#
         can.addEventListener("mousemove", function (e) {
             getMousePosition(can, e);
         }); 
+
+        can.addEventListener("mouseup", function (e) {
+            openClickedFrame(can, e);
+        }); 
 	
 }
 
@@ -1556,7 +1602,9 @@ function getMousePosition(canvas, event) {
             let x = event.clientX - rect.left;
             let y = event.clientY - rect.top;
 
-	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(2) +  "| y: " + y.toFixed(2) ;
+	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(0) +  "| y: " + y.toFixed(2) ;
+	//document.querySelector("#cood").style.setProperty("top", (y+10)+"px");
+	//document.querySelector("#cood").style.setProperty("left", (x+10)+"px");
 }
 
 function getMousePosition_band(band, event) {
@@ -1566,8 +1614,36 @@ function getMousePosition_band(band, event) {
 
 	var content = event.target.innerText;
 
-	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(2) +  "| y: " + y.toFixed(2) + " ||| " + content ;
+	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(0) +  "| y: " + y.toFixed(2) + " ||| " + content ;
+	//document.querySelector("#cood").style.setProperty("top", (y+10)+"px");
+	//document.querySelector("#cood").style.setProperty("left", (x+10)+"px");
 }
+
+
+
+function openClickedFrame(can, e){
+
+	 let rect = can.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+
+	var retg = document.querySelector("#reticle_g");
+
+	if(retg.hasAttribute("locked")){
+
+		retg.style.setProperty("width", event.clientX); 
+		retg.removeAttribute("locked");
+		return;
+	}
+
+
+
+	create_frame_html(x.toFixed(0));
+	document.querySelector("#reticle_g").setAttribute("locked",1);
+	document.querySelector("#input_div input").value = x.toFixed(0);
+
+}
+
 
 
 
@@ -1650,6 +1726,10 @@ function draw_graph_change(obj_data, qs_append_to="#graphs"){
             getMousePosition(can, e);
         }); 
 
+
+	can.addEventListener("mouseup", function (e) {
+            openClickedFrame(can, e);
+        }); 
 }
 
 
@@ -1674,6 +1754,10 @@ function draw_separation(h, qs_append_to="#graphs"){
             getMousePosition(can, e);
         }); 
 
+        can.addEventListener("mouseup", function (e) {
+            openClickedFrame(can, e);
+        }); 
+
 }
 
 
@@ -1683,7 +1767,6 @@ function draw_label_band(dic, qs_append_to="#graphs"){
 
 	var band = document.createElement("div");
 	band.setAttribute("class", "band");
-
 
 	var keys = Object.keys(dic);
 	var x_old = 0;
@@ -1720,6 +1803,10 @@ function draw_label_band(dic, qs_append_to="#graphs"){
 	band.addEventListener("mousemove", function (e) {
       		 getMousePosition_band(band, e);
       	  }); 
+
+        band.addEventListener("mouseup", function (e) {
+            openClickedFrame(band, e);
+        }); 
 }
 
 function draw_all_graphs(){
@@ -1833,10 +1920,21 @@ function draw_all_graphs(){
 
 window.addEventListener("mousemove", ()=> {
 
-	ret = document.querySelector("#reticle");
-	ret.style.setProperty("width", event.clientX);
-	//ret.style.setProperty("top", event.clientY);
+	retg = document.querySelector("#reticle_g");
 
+	if(retg.hasAttribute("locked")){
+		return;
+	}
+
+	//retg.style.setProperty("width", event.clientX);
+  	let rect = document.querySelector("#graphs").getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+	retg.style.setProperty("width", x+148);
+
+
+
+	//ret.style.setProperty("top", event.clientY);
 	ret_y = document.querySelector("#reticle_y");
 	ret_y.style.setProperty("height", event.clientY);
 
