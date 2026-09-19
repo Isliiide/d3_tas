@@ -1,26 +1,26 @@
 # d3_tas
 developping TAS tools from DescentDevelopers/Descent3
 
-As of now (commit 74fe6c9) (and next commit is this readme.md) : 
+As of now (commit 5307bae) (and next commit is this readme.md) : 
 
-# Recording/Replaying control inputs (works but not good)
+## Recording/Replaying control inputs (works but not good)
 it's possible to press F9 to start recording inputs in game, F9 again to stop, then F10 to play back the recorded inputs
 It works because F9 and F10 handling has been modified in GameLoop.cpp, and Controls.cpp got updated with functions, to rec/play inputs to/from memory, as well as to/from local files. Format used was first .txt, then a custom binary format .sgc (for shrunk game controls). These can be modified with HexEdit, or viewed with the html sgc parser provided. 
 
 sgc files should be in the game directory, but this ends up being Appdata/Roaming/Outrage Entertainment/Descent3. The sgc file used by the game then needs to be named log_shrunk.sgc
 
-# Playing in slowmotion/stopmotion (works nice!)
+## Playing in slowmotion/stopmotion (works nice!)
 Stop motion and slow motion are also possible. Pressing K will cycle through normal speed, speed/2, speed/4 and speed/8. It works by hacking FrameTime, a value used for all physics computations of the game (normally?). Pressing J will enter step_by_step mode, so the game logic will freeze, and then pressing K will allow a single step. Press J again to escape this mode.
 
 In order to adjust the sound sample rate to the slomo factor, so one can speed up a recording and end up with both audio and video at correct speed, it's possible to create a file named hackAudioSampleRate.txt (in Appdata/Roaming/Outrage Entertainment/Descent3), and write the desired rate inside. Normal rate is 22050, 11025 for slomo x2, 5513 for slomo x4 and 2757 for slomo x8. It necessary to restart the game for this change to take effect.
 
-# Diagonal control scheme (works but not good)
+## Diagonal control scheme (works but not good)
 Pressing the key L allows to enter in "diagonal control" mode, so pressing forward is replaced by a whole trichording movement (= like pressing forward, up, and right at the same time), and side keys are modified to be banking so the control scheme stays somewhat useable.
 
-# Demo analyser (works nice)
+## Demo analyser (works nice)
 the demo_parser.html allows to open a .dem file and view a timeline of events happening inside. It also links to the correct game frame and hex offset in the demo file. The purpose would be to find a timestamp in the demo, and ask the game to load from there, instead of using regular save files.
 
-# Demo hacking (wip)
+## Demo hacking (wip)
 The demo reading method has been reworked, so it first makes a first pass on the demo file and gathers all newFrames indices. It's then possible to freely jump at any point in the demo. The problem is that causality is altered, and if you get back in time, maybe some enemies will already be dead because they have been killed in "the future" and kill flags are still raised for the game engine. Even if we always begin at the start of the demo and then fast forward, these flags need the whole demo file to be reloaded from the main menu to disappear.
 
 The method to seek one frame forward or backward somewhat works, but can cause the demo to abort, or the game to crash. (it's not implemented on this commit)
@@ -29,11 +29,18 @@ One feature works though : you can create a file hackDemoStartFrame.txt (in Appd
 
 Pressing key M in a demo playback will cancel the demo flag, and you'll be able to take control of the ship and play normally. Although this only works if you started the demo record when controls were allowed for the ship (ie: not during a cutscene)
 
-The current velocity of the ship is also printed in HUD messages. It's a way to save this info in the demo file, so when the demo is canceled, the ship is given the velocity it should have had, instead of stopping still.
+The current velocity of the ship is also printed in HUD messages. It's a way to save this info in the demo file, so when the demo is canceled, the ship is given the velocity it should have had, instead of stopping still. 
 
-Pressing U will lock/unlock the current velocity
+*When playing a level, an automatic demo recording will trigger when the intro cutscene ends. The name of the file is "autodemo.dem". Don't forget to end the demo before the level ends, or then the next level will be loaded and this file will be overwritten. When exiting demo playback using key_m, an automatic demo will also be triggerd on the same frame, with the name "autodemo" + the gameFrame value displayed in the hud. This is meant to avoid naming collisions, but the runner should handle these files themselves.*
 
-# Known problems :
+## Keys recap
+- U : will lock/unlock the current velocity
+- J : toggle step by step mode
+- K : change slomo factor (or advance one step in step by step mode)
+- L : toggle diagonal controls
+- M : (in demo playback) escapes the playback
+
+## Known problems :
 
 - the playback of inputs is still subject to desync issues, and the mere fact of leaving the first lv1 room gets complicated.
 - robots don't reliably act the same upon playing back / restarting level
