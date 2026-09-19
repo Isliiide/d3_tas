@@ -872,6 +872,8 @@ extern bool Display_renderer_stats;
 
 //islide
 //----------------------------
+#include <sstream>
+#include <string>
 bool step_by_step = false;
 bool one_more_step = false;
 int skip_loops = 0;  //counter, 
@@ -879,6 +881,7 @@ int skip_factor = 0;  // if skip_factor = 4, skip_loops will count 1.2.3 and onl
 
 int count_gameFrame = 0;  // this counter takes only physics update in account TODO reset when restarting a level
 int count_gameFrame_substep = 0;
+
 
 int slomo_factor = 1; // islide better than skip_factor, this one slows down all of the physics computation
 
@@ -1301,24 +1304,62 @@ void ProcessNormalKey(int key) {
 
       if (Demo_flags == DF_PLAYBACK) {
         
-        //Game_interface_mode = GAME_INTERFACE;
-        //Timedemo_frame = -1;
-        //Game_paused = false;
-        //ResumeControls();
-        //SetObjectControlType(Player_object, CT_FLYING);
+        /*
+        Game_interface_mode = GAME_INTERFACE;
+        Timedemo_frame = -1;
+        Game_paused = false;
+        ResumeControls();
+        SetObjectControlType(Player_object, CT_FLYING);
+        Objects[Players[Player_num].objnum].movement_type = MT_PHYSICS;
+        Objects[Players[Player_num].objnum].flags = 0;
+        SetObjectControlType(&Objects[Players[Player_num].objnum], CT_FLYING);
+        Players[Player_num].controller_bitflags = 0xffffffff; 
+        Players[0].controller_bitflags = 0xffffffff;        
+        Cinematic_Stop();
+        tOSIRISEventInfo ei;
+        Osiris_CallLevelEvent(EVT_PLAYER_MOVIE_END, &ei);
+        //
+        // recording after these works, but using these after recording don't work, so idk :/
+        Players[Player_object->id].controller_bitflags = 0xFFFFFFFF;
+        Player_object->flags |= OF_DESTROYABLE;
+        ResumeControls();
+
+        */
         // ^ what flag to regain control of the ship when its paralyzed by intro cutscene ????
+   
 
-        // controls flag 0xffffffff cf doFlyingMovement ?
+        //special cases :
+        // training : player can only go fwd, then backwd, all other directions are disabled
+        // -> Demo_flags = DF_NONE;
+        // 
+        // lv12 : player starts with directions disabled (prison)
+        // -> Demo_flags = DF_NONE;
+        // 
+        // lv10 : player moves during the cutscene, which has several cuts
+        // once a cut info is recorded in the demo, the cutscene will behave normally, and release player controls upon ending
+        // this means that recording the demo must start BEFORE any cutscene start
+        // or right after it ends ?
 
+
+        // this is already enough to move freely during training and lv12
         Demo_flags = DF_NONE;
 
-        //Objects[Players[Player_num].objnum].movement_type = MT_PHYSICS;
-        //SetObjectControlType(&Objects[Players[Player_num].objnum], CT_FLYING);
 
-        hacked_velocity heckvel = get_hacked_velocity();
-        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.x() = heckvel.vx;
-        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.y() = heckvel.vy;
-        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.z() = heckvel.vz;
+        // gameFrames of the game engine should update with the demo ones
+        count_gameFrame = get_game_frame_number();
+
+        std::stringstream ss_gamef;
+        ss_gamef << "autodemo" << get_game_frame_number();
+        std::string filename;
+        ss_gamef >> filename;
+
+        hacked_velocity hackvel = get_hacked_velocity();
+        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.x() = hackvel.vx;
+        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.y() = hackvel.vy;
+        Objects[Players[Player_num].objnum].mtype.phys_info.velocity.z() = hackvel.vz;
+
+        createDemoFileAndStartRec((char*)filename.c_str());
+        
       }
         
       return;
@@ -2889,6 +2930,7 @@ void InitFrameTime(void) {
 	//islide
 	count_gameFrame = 0;
 	count_gameFrame_substep = 0;
+        reset_count_level_cutscenes();
 }
 
 // Pauses game
@@ -2997,6 +3039,7 @@ void GameFrame(void) {
 #ifdef USE_RTP
   INT64 curr_time;
 #endif
+
 
   bool is_game_idle = !Descent->active();
 

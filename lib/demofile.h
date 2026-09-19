@@ -284,4 +284,13 @@ struct hacked_velocity {
 };
 
 hacked_velocity get_hacked_velocity();
+
+int get_game_frame_number();
+
+void createDemoFileAndStartRec(char *filename); 
+
+void reset_count_level_cutscenes();
+void inc_count_level_cutscenes();
+int get_count_level_cutscenes();
+
 #endif

@@ -450,7 +450,61 @@ hacked_velocity get_hacked_velocity() {
 
   return hackvel;
 }
+
+int game_frame_number = 0;
+int get_game_frame_number() {
+
+  return game_frame_number; 
+}
+
 //---------------------
+
+//islide : to skip the pop up menu
+int count_level_cutscenes = 0;
+void reset_count_level_cutscenes() { count_level_cutscenes = 0; }
+void inc_count_level_cutscenes() { count_level_cutscenes ++; }
+int get_count_level_cutscenes() { return count_level_cutscenes; }
+
+void createDemoFileAndStartRec(char *filename) {
+
+  std::filesystem::path demo_directory = cf_GetWritableBaseDirectory() / "demo";
+
+  std::error_code ec;
+  std::filesystem::create_directories(demo_directory, ec);
+  if (ec) {
+    LOG_ERROR << "Failed to create " << demo_directory << " directory. Unable to create demo file!";
+    AddBlinkingHUDMessage(TXT_DEMOCANTCREATE);
+    Demo_fname.clear();
+    return;
+  }
+
+  Demo_fname = demo_directory / filename;
+  Demo_fname.replace_extension(".dem");
+
+  LOG_INFO << "Saving demo to file " << Demo_fname;
+  // Try to create the file
+  Demo_cfp = cfopen(Demo_fname, "wb");
+  if (!Demo_cfp) {
+    // cfopen failed
+    LOG_ERROR << "Unable to create demo file!";
+    AddBlinkingHUDMessage(TXT_DEMOCANTCREATE);
+    Demo_fname.clear();
+    return;
+  }
+
+  // Set up the demo variables
+  if (!(Game_mode & GM_MULTI)) {
+    MultiBuildMatchTables();
+  }
+  // Male sure we write the player info the first frame
+  Demo_last_pinfo = timer_GetTime() - (DEMO_PINFO_UPDATE * 2);
+  Demo_flags = DF_RECORDING;
+  // Write the header
+  DemoWriteHeader();
+  DemoStartNewFrame();
+
+}// \islide
+
 
 
 
@@ -1203,17 +1257,31 @@ void DemoReadHudMessage() {
     AddHUDMessage(msg);
   }
 
-
+  //-------------------------------------
+  //islide
+  int ret;
   //velocity hack
   float vx, vy, vz;
   char str[9] = {};
-  int ret = std::sscanf(msg, "%8s %f %f %f", str, &vx, &vy, &vz);
+  //expecting "velocity x.xx y.yy z.zz"
+  ret = std::sscanf(msg, "%8s %f %f %f", str, &vx, &vy, &vz);
   if ((ret == 4) && (strcmp(str, "velocity") == 0)) {
   
     hackvel.vx = vx;
     hackvel.vy = vy;
     hackvel.vz = vz;
   }
+
+  //retrieve og gameFrame number
+  char str2[10] = {};
+  char str3[2] = {};
+  int gamef = 0;
+  //expecting "GameFrame : 999 + 0/8"
+  ret = std::sscanf(msg, "%9s %1s %d", str2, str3, &gamef);
+  if ((ret == 3) && (strcmp(str2, "GameFrame") == 0)) {
+    game_frame_number = gamef;
+  }
+  //-------------------------------------
 }
 
 void DemoReadWeaponFire() {
