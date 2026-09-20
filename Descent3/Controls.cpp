@@ -460,6 +460,18 @@ static float Control_current_time;
 
 //--------------------------------------------------------------------------------------
 static int counting_calls = 0; //islide
+
+bool should_hack_afterburner = true;
+float ab_limit_high = 4.59;
+float ab_limit_low = 4.55;
+float ab_limit = ab_limit_low;
+
+void toggle_afterburner_hack() {
+
+  should_hack_afterburner = !should_hack_afterburner;
+  return;
+}
+
 bool use_diagonal_controls = false;
 
 void toggle_diagonal_controls() {
@@ -1168,6 +1180,26 @@ void ReadPlayerControls(
     inputs_feed_from.close();
     AddHUDMessage("feeding inputs done");
   }
+
+  //----------------------------------------------------
+
+  //ab hack
+
+  //AddHUDMessage("afterburner : %f", Players[0].afterburn_time_left);
+  if (should_hack_afterburner) {
+    if (Players[0].afterburn_time_left <= ab_limit) {
+
+      controls->afterburn_thrust = 0;
+      ab_limit = ab_limit_high;
+    }
+
+    if (Players[0].afterburn_time_left >= ab_limit) {
+
+      ab_limit = ab_limit_low;
+    }
+  }
+
+
   
   //-----------------------------------------------------
    // islide : setup log_input file

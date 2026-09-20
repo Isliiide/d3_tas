@@ -1297,7 +1297,9 @@ void ProcessNormalKey(int key) {
 
 
     case KEY_U:
-      toggle_lock_velocity();
+      //toggle_lock_velocity();
+      toggle_afterburner_hack();
+
       break;
        
     case KEY_M: //to playback a demo, and then exit the playback and be in tha game engine in the same state

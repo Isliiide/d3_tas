@@ -261,6 +261,7 @@ struct shrunk_gc {
 
 //islide
 void toggle_diagonal_controls();
+void toggle_afterburner_hack();
 
 //	Controller object.
 extern gameController *Controller;
