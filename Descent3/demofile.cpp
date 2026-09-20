@@ -394,34 +394,42 @@ void demo_jump_to_frame(int val) { //val should be +1 or -1 ; or 0 for reset
   //guard
   if (demo_newFrame_offsets.size() == 0) {
 
+    /*
     std::ofstream message;
     message.open("message.txt", std::ios_base::app);
     message << "WARNING the first pass found 0 newFrames\n";
     message.close();
+    */
     return;
   }
 
 
   if (val == 0) { //reset of wanted_start_frame
+
     std::ifstream start_demo_on_wanted_frame;
     start_demo_on_wanted_frame.open("hackDemoStartFrame.txt");
 
-    if (start_demo_on_wanted_frame) {
+    if (start_demo_on_wanted_frame.good()) {
 
       start_demo_on_wanted_frame >> wanted_start_frame;
       start_demo_on_wanted_frame.close();
+    } else {
+    
+      wanted_start_frame = 0;
     }
 
   } else {
 
     return; // for clean git push lets disable faulty mechanics
-    wanted_start_frame += val;  // +1 or -1
+    //wanted_start_frame += val;  // +1 or -1
   }
 
   // clamping
+  /* if no first pass, we don't know this one
   if (wanted_start_frame >= demo_newFrame_offsets.size()) {
     wanted_start_frame = demo_newFrame_offsets.size() - 1;
   }
+  */
   if (wanted_start_frame < 0) {
     wanted_start_frame = 0;
   }
@@ -439,6 +447,11 @@ void demo_jump_to_frame(int val) { //val should be +1 or -1 ; or 0 for reset
   for (int i = 0; i < wanted_start_frame; i++) {
 
     DemoFrame();
+
+    //normally demo aborts on eof/bad_opcode and shows final menu, but let's not do another DemoFrame
+    if (get_demo_eof()) {
+      break;
+    }
   }
 
   set_should_sandbag_playback(true);
@@ -981,22 +994,39 @@ int DemoPlaybackFile(const std::filesystem::path &filename) {
 
   //  islide ----------------------------
 
+  // DemoPlaybackFile is supposed to be called only once by the game sequencer, when loading a dmeo
+
   demo_newFrame_offsets.clear();
   set_demo_parsed_first_pass(false);
 
-  set_demo_eof(false);
-  set_DemoRead_parse_only(true);
-  set_should_sandbag_playback(false);
-  //demo_current_frame = 0;
+  bool do_first_pass = false;
+
+  if (do_first_pass){
+
+    set_demo_eof(false);
+    set_DemoRead_parse_only(true);
+    set_should_sandbag_playback(false);
+    // demo_current_frame = 0;
+
+    int count_frames_before_abort = 0;
+    while (!get_demo_eof() && (count_frames_before_abort < 100000)) {
+
+      DemoFrame();
+      count_frames_before_abort++;
+    }
+  } else {
+
+    // we need demo_newFrame_offsets[0]
+    // on first pass, it's pushed by the first DemoReadNewFrame
+    // but since no prepass, we have to read this value ourseleves here
   
-  int count_frames_before_abort = 0; 
-  while (!get_demo_eof() && (count_frames_before_abort < 123456)) {
+    long file_pos = cftell(Demo_cfp);
+    demo_newFrame_offsets.push_back(file_pos);
+ 
+  }
 
-    DemoFrame();
-    count_frames_before_abort++;
-  }  
-
-  demo_jump_to_frame(0); // beruilds causality from start to wanted frame in hackDemoStartFrame
+  // warning : this doesn't mean jump to frame 0, rather jump to wantedFrame+0
+  demo_jump_to_frame(0); // rebuilds causality from start to wanted frame in hackDemoStartFrame
   
   //v teleports you fast but loses causality of past events
   //cfseek(Demo_cfp, demo_newFrame_offsets[wanted_start_frame], SEEK_SET);
