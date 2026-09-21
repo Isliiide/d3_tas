@@ -108,13 +108,13 @@ background: #dab764;
 
 	display: grid;
 	grid-template-columns: 140px auto;
-height: 1495px;
+height: 1520px;
   overflow: hidden;
 }
 
 #graph_titles{
 	display: grid;
-  grid-template-rows: repeat(4, 138px) repeat(4, 25px) 34px  100px  32px repeat(3, 25px) 100px 34px 25px repeat(20, 34px);
+  grid-template-rows: repeat(4, 138px) repeat(5, 25px)  100px  32px repeat(3, 25px) 100px 34px 25px repeat(20, 34px);
 
 }
 
@@ -383,7 +383,6 @@ function load_file(files){
 	
 	
 	draw_all_graphs();
-
 
 	document.querySelector("#file_loader").style.setProperty("background", "#cbf");
 
@@ -858,7 +857,23 @@ function DemoReadObj(){
 		make_label("player_flags");	read4();
 	}
 
+/*
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
 
+
+	var maybe_opcode = globals.data_view.getUint8(globals.i);
+	
+	if((0 < maybe_opcode) && (maybe_opcode <= 26)){    //will read 04 and this its opcode, while in fact it's player_flag=dead,so bad method
+		return;
+	} else {
+		make_label("player_flags");	read4();
+	}
+
+*/
 
 }
 
@@ -1110,6 +1125,7 @@ function DemoReadWeaponFire(){
 		}
 	}
 	
+	//weapon_fire[globals.count_newFrame] = unid; //i want this to change every time
 }
 
 function DemoReadObjWeapFireFlagChanged(){
@@ -1223,8 +1239,8 @@ function DemoReadPersistantHUDMessage(){
 	make_label("msglength");	var len = read2();
 
 	var buf ="";
-	var char = 0xff;
-	while(char != 0x00 && buf.length < 200){
+	var cchar = 0xff;
+	while(cchar != 0x00 && buf.length < 200){
 
 		if(globals.data_view.byteLength - globals.i < 1){
 			globals.eof = true;
@@ -1232,8 +1248,8 @@ function DemoReadPersistantHUDMessage(){
 			return;
 		}
 
-		char = globals.data_view.getUint8(globals.i); globals.i++;
-		buf += String.fromCharCode(char);
+		cchar = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(cchar);
 	}
 	make_label("HUDmessage");
 	persistantHUDmessages[globals.count_newFrame] = buf;	
@@ -1342,12 +1358,13 @@ function DemoReadUnattachObj(){
 }
 
 cinematics = {}
+//cinematics_length = 0;
 function DemoReadCinematics(){
 
 	create_new_box("DemoReadCinematics", 1);
 	make_label("length");		var len = read2();
 
-	cinematics[globals.count_newFrame] = Object.keys(cinematics).length;
+	//cinematics[globals.count_newFrame] = cinematics_length; cinematics_length++;  //using keys don't work if a key is overwritten on same frame
 
 	if(globals.data_view.byteLength - globals.i < len){
 		globals.eof = true;
@@ -1356,7 +1373,143 @@ function DemoReadCinematics(){
 	}
 	
 	//skip
-	globals.i += len;
+	//globals.i += len;
+
+	
+	make_label("cdi_canned");	var cdi_canned = read1();
+	
+	if(!cdi_canned){
+		
+		make_label("flags");				read4();
+		make_label("target_obj_handle");	read4();
+		make_label("end_transition");		read4();
+		make_label("start_transition");		read4();
+		make_label("path_id");				read4();
+		
+		make_label("pos_x");				read4(true);
+		make_label("pos_y");				read4(true);
+		make_label("pos_z");				read4(true);
+
+		make_label("room");					read4();
+		
+		make_label("extended");				var extended = read1();
+		
+		if(extended){
+		
+			make_label("mat_11");				read4(true);
+			make_label("mat_21");				read4(true);
+			make_label("mat_31");				read4(true);
+			make_label("mat_21");				read4(true);
+			make_label("mat_22");				read4(true);
+			make_label("mat_23");				read4(true);
+			make_label("mat_13");				read4(true);
+			make_label("mat_23");				read4(true);
+			make_label("mat_33");				read4(true);	
+			
+		} 
+		
+		make_label("max_time_play");				read4(true);	
+		make_label("text_display.max");				read4(true);
+		make_label("text_display.min");				read4(true);
+		make_label("track_target.max");				read4(true);
+		make_label("track_target.min");				read4(true);
+		make_label("player_disabled.max");				read4(true);
+		make_label("player_disabled.min");				read4(true);
+		make_label("in_camera_view.max");				read4(true);
+		make_label("in_camera_view.min");				read4(true);
+		make_label("quick_exit.max");				read4(true);
+		make_label("quick_exit.min");				read4(true);
+		
+		var len_left = len - 82 - extended*36;
+		
+		var buf ="";
+		var cchar = 0xff;
+		while(cchar != 0x00 && buf.length < len_left){
+
+			if(globals.data_view.byteLength - globals.i < 1){
+				globals.eof = true;
+				console.log("EOF reached");
+				return;
+			}
+
+			cchar = globals.data_view.getUint8(globals.i); globals.i++;
+			buf += String.fromCharCode(cchar);
+		}
+	
+		cinematics[globals.count_newFrame] = buf; 
+		make_label("text_string");
+		
+		if(globals.create_html){
+
+			var sp = document.createElement("span");
+			sp.setAttribute("class", "data_val");
+			sp.innerText = buf;
+
+			globals.active_div.appendChild(sp);
+			
+		}
+		make_label("old_camera_objnum");			read4();
+		
+		//globals.i += (len_left - buf.length - 4); //should be += 0 since we read everything
+	}
+	
+	if(cdi_canned){
+		
+		make_label("type");						read4();
+		make_label("camera_path_id");			read4();
+		make_label("target_path_id");			read4();
+		make_label("target_obj_handle");		read4(); ///////////// ????????
+		
+		make_label("time");						read4(true);
+		make_label("obj_to_use_for_point");		read4();
+		make_label("room");					read4();	
+		
+		make_label("pos_x");				read4(true);
+		make_label("pos_y");				read4(true);
+		make_label("pos_z");				read4(true);
+
+		make_label("mat_11");				read4(true);
+		make_label("mat_21");				read4(true);
+		make_label("mat_31");				read4(true);
+		make_label("mat_21");				read4(true);
+		make_label("mat_22");				read4(true);
+		make_label("mat_23");				read4(true);
+		make_label("mat_13");				read4(true);
+		make_label("mat_23");				read4(true);
+		make_label("mat_33");				read4(true);	
+
+		var len_left = len - 77;
+		
+		var buf ="";
+		var cchar = 0xff;
+		while(cchar != 0x00 && buf.length < len_left){
+
+			if(globals.data_view.byteLength - globals.i < 1){
+				globals.eof = true;
+				console.log("EOF reached");
+				return;
+			}
+
+			cchar = globals.data_view.getUint8(globals.i); globals.i++;
+			buf += String.fromCharCode(cchar);
+		}
+	
+		make_label("text_to_display");
+		cinematics[globals.count_newFrame] = buf; 
+		
+		if(globals.create_html){
+			var sp = document.createElement("span");
+			sp.setAttribute("class", "data_val");
+			sp.innerText = buf;
+
+			globals.active_div.appendChild(sp);
+			
+		}
+		
+		make_label("old_camera_objnum");		read4();
+		
+		//globals.i += (len_left - 4); //should be += 0 since we read everything
+	}
 
 }
 
@@ -1787,7 +1940,6 @@ function draw_label_band(dic, qs_append_to="#graphs"){
 	var band = document.createElement("div");
 	band.setAttribute("class", "band");
 
-	
 	var keys = Object.keys(dic);
 	var x_old = 0;
 
@@ -1862,6 +2014,11 @@ function draw_all_graphs(){
 	draw_graph_title("shield");
 	draw_graph_change(player_info_shield, "#graphs");
 	draw_graph(0, 200, 100, player_info_shield, "blue", "#graphs");
+	
+	cinematics[0]="...";
+	draw_graph_title("cinematics");
+	draw_label_band(cinematics);
+	
 
 	HUDmessages_GB[1]="...";
 	draw_graph_title("guidebot messages");
@@ -1879,9 +2036,7 @@ function draw_all_graphs(){
 	draw_graph_title("player room");
 	draw_label_band(player_obj_room);
 
-	cinematics[1]=(-1);
-	draw_graph_title("cinematics");
-	draw_graph_change(cinematics);
+
 
 
 	draw_graph_title("");
