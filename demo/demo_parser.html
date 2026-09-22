@@ -108,13 +108,13 @@ background: #dab764;
 
 	display: grid;
 	grid-template-columns: 140px auto;
-height: 1520px;
+height: 1736px;
   overflow: hidden;
 }
 
 #graph_titles{
 	display: grid;
-  grid-template-rows: repeat(4, 138px) repeat(5, 25px)  100px  32px repeat(3, 25px) 100px 34px 25px repeat(20, 34px);
+  grid-template-rows: repeat(4, 138px) repeat(4, 25px)  100px  repeat(7, 25px) 100px 32px repeat(3, 25px) 100px 34px 25px repeat(20, 34px);
 
 }
 
@@ -129,6 +129,16 @@ margin-left: -30px;
   background: #000;
 padding-top: 4px;
 outline: 1px solid grey;
+}
+
+.graph_title[section] {
+  --padding-top: 72px;
+  color: #b97100;
+  --cursor: pointer;
+}
+
+.graph_title[section]:hover {
+  --color: white;
 }
 
 .graph {
@@ -160,7 +170,7 @@ display : grid;
   background: #8f8f8f;
   color: #fff;
   padding-bottom: 2px;
-  background: linear-gradient(90deg,rgb(162, 91, 0) 0%, rgb(0, 0, 0) 50%)
+  background: linear-gradient(90deg,rgb(162, 91, 0) 0%, rgb(0, 0, 0) 40%)
 }
 
 /*
@@ -199,7 +209,7 @@ top: 0px;
 	border-right: 2px dashed white;
 	left: 0px;
 	top: 0px;
-	height: 1520px;
+	height: -1728px;
 	width: 10px;
 	 pointer-events: none;
 }
@@ -209,8 +219,8 @@ top: 0px;
 position: relative;
   border-right: 2px dashed white;
   left: -148px;
-  top: -1520px;
-  height: 1520;
+  top: -1728px;
+  height: 1728px;
   pointer-events: none;
   display: flex;
 
@@ -235,7 +245,26 @@ position: relative;
 
 
 
+button[val='0'] {
+	
+	color : black;
+background: #616161;
+  border: 4px outset #616161;
+}
 
+button[val='1'] {
+	
+	color : black;
+	background: #dc9323;
+  border: 4px inset #d9944a;
+}
+
+button {
+	
+	cursor:pointer;
+	border-radius: 4px;
+
+}
 
 
 </style>
@@ -243,7 +272,11 @@ position: relative;
 
 <body>
 
-<input id="file_loader" type="file" accept=".dem" onchange="load_file(event.target.files)" ></input>
+<input id="file_loader" type="file" accept=".dem" onchange="load_file(event.target.files)" >
+supplementary info :
+<button id="in_Msafe" val="0" onclick="button_toggle(this)">parse_MSafe</button>
+<button id="in_Combat" val="0" onclick="button_toggle(this)">parse_Combat</button>
+<button id="in_Inventory" val="0" onclick="button_toggle(this)">parse_Inventory</button>
 <div id="reticle_y"></div>
 <div id="cood"></div>
 <div id="graph_wrapper">
@@ -272,6 +305,23 @@ globals = {
 	header_gametime: [0xFF, 0xFF, 0xFF, 0xFF],
 	should_stop_on_new_frame: false,
 };
+
+function button_toggle(e){
+	
+	if(!e.hasAttribute("val")){
+		return;
+	}
+	
+	if(e.getAttribute("val") == "0"){
+		e.setAttribute("val", "1");
+		return;
+	}
+	
+	if(e.getAttribute("val") == "1"){
+		e.setAttribute("val", "0");
+		return;
+	}
+}
 
 function dec_to_hex(dec){
 
@@ -1150,37 +1200,218 @@ function DemoReadKillObject(){
 	make_label("seed");		read2();
 }
 
+
+MS_lut = {
+	0: "ROOM_TEXTURE",
+	1: "ROOM_WIND",
+	2: "ROOM_FOG",
+	3: "ROOM_LIGHT_PULSE",
+	4: "PORTAL_RENDER",
+	5: "ROOM_FOG_STATE",
+	6: "ROOM_CHANGING_FOG",
+	7: "ROOM_CHANGING_WIND",
+	8: "ROOM_DAMAGE",
+	9: "ROOM_LIGHT_FLICKER",
+	10: "ROOM_LIGHT_STROBE",
+	11: "ROOM_REFUEL",
+	12: "ROOM_HAS_PLAYER",
+	13: "ROOM_BREAK_GLASS",
+	14: "ROOM_PORTAL_BLOCK",
+	15: "ROOM_REMOVE_ALL_POWERUPS",
+	
+	20: "OBJECT_SHIELDS",
+	21: "OBJECT_ENERGY",
+	22: "OBJECT_BLANK",
+	23: "OBJECT_LIGHT_COLOR",
+	24: "OBJECT_MOVEMENT_SCALAR",
+	25: "OBJECT_RECHARGE_SCALAR",
+	26: "OBJECT_WSPEED_SCALAR",
+	27: "OBJECT_DAMAGE_SCALAR",
+	28: "OBJECT_ARMOR_SCALAR",
+	29: "OBJECT_DAMAGE_OBJECT",
+	30: "OBJECT_TYPE",
+	31: "OBJECT_ID",
+	32: "OBJECT_ADD_WEAPON",
+	33: "OBJECT_START_SPEW",
+	34: "OBJECT_STOP_SPEW",
+	35: "OBJECT_GHOST",
+	36: "OBJECT_UNGHOST",
+	37: "OBJECT_REMOVE",
+	38: "OBJECT_POS",
+	39: "OBJECT_ORIENT",
+	40: "OBJECT_ROOMNUM",
+	41: "OBJECT_VELOCITY",
+	42: "OBJECT_ROTVELOCITY",
+	43: "OBJECT_THRUST",
+	44: "OBJECT_ROTTHRUST",
+	45: "OBJECT_FLAGS",
+	46: "OBJECT_SIZE",
+	47: "OBJECT_CONTROL_TYPE",
+	48: "OBJECT_MOVEMENT_TYPE",
+	49: "OBJECT_CREATION_TIME",
+	50: "OBJECT_CLOAKALLPLAYERS",
+	51: "OBJECT_PHYSICS_FLAGS",
+	52: "OBJECT_PARENT",
+	53: "OBJECT_ROTDRAG",
+	54: "OBJECT_INVULNERABLE",
+	55: "OBJECT_CLOAK",
+	56: "OBJECT_PLAYER_HANDLE",
+	57: "OBJECT_PLAYER_CMASK",
+	58: "OBJECT_NO_RENDER",
+	59: "OBJECT_LIGHT_DIST",
+	60: "OBJECT_DEFORM",
+	61: "OBJECT_VIEWER_SHAKE",
+	62: "OBJECT_PLAYER_KEY",
+	63: "OBJECT_PLAYER_CONTROLAI",
+	64: "OBJECT_WORLD_POSITION",
+	65: "OBJECT_COUNT_TYPE",
+	66: "OBJECT_SPARKS",
+	67: "OBJECT_SETONFIRE",
+	68: "OBJECT_SHAKE_AREA",
+	69: "OBJECT_ENERGY_WEAPON",
+	70: "OBJECT_DAMAGE_AMOUNT",
+	71: "OBJECT_SHIELDS_ORIGINAL",
+	72: "SHOW_ENABLED_CONTROLS",
+	73: "OBJECT_FIRE_WEAPON",
+	74: "OBJECT_DESTROY_ROBOTS_EXCEPT",
+	
+	100: "WEATHER_RAIN",
+	101: "WEATHER_SNOW",
+	102: "WEATHER_LIGHTNING",
+	103: "WEATHER_LIGHTNING",
+	104: "WEATHER_LIGHTNING_BOLT_POS",
+	
+	110: "SOUND_2D",
+	111: "SOUND_OBJECT",
+	112: "SOUND_STREAMING",
+	113: "SOUND_STOP",
+	114: "SOUND_STOP_OBJ",
+	115: "SOUND_VOLUME_OBJ",
+	
+	//#define MSAFE_MATCEN 130
+	
+	150: "MISC_HUD_MESSAGE",
+	151: "MISC_WAYPOINT",
+	152: "MISC_END_LEVEL",
+	153: "MISC_POPUP_CAMERA",
+	154: "MISC_CLOSE_POPUP",
+	155: "MISC_GAME_MESSAGE",
+	156: "MISC_REGION",
+	157: "MISC_ENABLE_SHIP",
+	158: "MISC_LEVELGOAL",
+	159: "MISC_GUIDEBOT_NAME",
+	160: "MISC_FILTERED_HUD_MESSAGE",
+	161: "MISC_START_TIMER",
+	162: "MISC_ADD_HUD_ITEM",
+	163: "MISC_UPDATE_HUD_ITEM",
+
+	170: "DOOR_LOCK_STATE",
+	171: "DOOR_ACTIVATE",
+	172: "DOOR_POSITION",
+	173: "DOOR_STOP", 
+	174: "DOOR_OPENABLE",
+	
+	//#define MSAFE_MISSION 180
+	
+	190: "TRIGGER_SET",
+	
+	200: "INVEN_ADD_TYPE_ID",
+	201: "INVEN_CHECK",
+	202: "INVEN_COUNT",
+	203: "INVEN_REMOVE",
+	204: "INVEN_SIZE",
+	205: "INVEN_GET_TYPE_ID",
+	206: "INVEN_ADD_OBJECT",
+	207: "INVEN_CHECK_OBJECT",
+	208: "INVEN_REMOVE_OBJECT",
+	
+	210: "COUNTERMEASURE_ADD", 
+	211: "COUNTERMEASURE_COUNT",
+	212: "COUNTERMEASURE_CHECK",
+	213: "COUNTERMEASURE_REMOVE",
+	214: "COUNTERMEASURE_SIZE",
+	215: "COUNTERMEASURE_GET",
+	
+	250: "WEAPON_CHECK",
+	251: "WEAPON_ADD",
+};
+
+MSafe_doors = {};
+MSafe_sounds = {};
+MSafe_inventory = {};
+MSafe_misc = {};
+MSafe_objects = {};
+MSafe_rooms = {};
 function DemoReadMSafe(){
 
 	create_new_box("DemoReadMSafe", 1);
 	make_label("length");		var len = read2();
+	make_label("header1");		read1(); // these are normally counted in len, so we substract later
+	make_label("header2");		read2();
+	make_label("type");			
+	var type = globals.data_view.getUint8(globals.i); globals.i ++;// match with super long enum
+	
 
+	if(0 <= type && type <= 15){
+		MSafe_rooms[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(20 <= type && type <= 74){
+		MSafe_objects[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(110 <= type && type <= 115){
+		MSafe_sounds[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(150 <= type && type <= 163){
+		MSafe_misc[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(170 <= type && type <= 174){
+		MSafe_doors[globals.count_newFrame] = MS_lut[type];
+	} 	
+	if(200 <= type && type <= 251){
+		MSafe_inventory[globals.count_newFrame] = MS_lut[type];
+	}	
+	
+	
 
 	//skipping
 	//globals.i += len;
 
-	if(globals.data_view.byteLength - globals.i < len){
+	if(globals.data_view.byteLength - globals.i < (len-4)){
 		globals.eof = true;
 		console.log("EOF reached");
 		return;
 	}
 
 	var buf ="";
-	var char = 0xff;
-	for(var i=0; i<len; i++){
-		char = globals.data_view.getUint8(globals.i); globals.i++;
-		buf += String.fromCharCode(char);
+	var cchar = 0xff;
+	for(var i=0; i<(len-4); i++){
+		cchar = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(cchar);
 	}
-	make_label("multi_info");	
+		
 
 
 	if(!globals.create_html){
 		return;
 	}
+	
+	var sptype = document.createElement("span");
+	sptype.setAttribute("class", "data_val");
+	sptype.innerText = MS_lut[type];
+	
+	globals.active_div.appendChild(sptype);
+
+	make_label("multi_info");
 
 	var sp = document.createElement("span");
 	sp.setAttribute("class", "data_val");
 	sp.innerText = buf;
+	
+	//buf skip header
+	// 1
+	// 2
+	// type 1
+	//switch 0_0 like 50 possibilities ...!
 
 	globals.active_div.appendChild(sp);
 }
@@ -1774,7 +2005,7 @@ function getMousePosition(canvas, event) {
             let x = event.clientX - rect.left;
             let y = event.clientY - rect.top;
 
-	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(0) +  "| y: " + y.toFixed(2) ;
+	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | demoFrame: " + x.toFixed(0) +  "| y: " + y.toFixed(2) ;
 	//document.querySelector("#cood").style.setProperty("top", (y+10)+"px");
 	//document.querySelector("#cood").style.setProperty("left", (x+10)+"px");
 }
@@ -1902,6 +2133,8 @@ function draw_graph_change(obj_data, qs_append_to="#graphs"){
 	can.addEventListener("mouseup", function (e) {
             openClickedFrame(can, e);
         }); 
+		
+	return can;
 }
 
 
@@ -1979,16 +2212,44 @@ function draw_label_band(dic, qs_append_to="#graphs"){
         band.addEventListener("mouseup", function (e) {
             openClickedFrame(band, e);
         }); 
+		
+	return d;
 }
 
-function draw_all_graphs(){
-
+function draw_all_graphs(sections_to_display=[1,2,3]){
+	
+	document.querySelector("#graph_titles").innerHTML = "";
+	document.querySelector("#graphs").innerHTML = "";
+	document.querySelector("#graph_wrapper").setAttribute("displayed_section", sections_to_display);
+	
+	sections_to_display =[];
+	sections_on = {
+		1:false,
+		2:false,
+		3:false,
+	}; 
+	if(document.querySelector("#in_MSafe").getAttribute("val") == "1"){
+		//sections_to_display.push(1);
+		sections_on[1] = true;
+	}
+	if(document.querySelector("#in_Combat").getAttribute("val") == "1"){
+		//sections_to_display.push(2);
+		sections_on[2] = true;
+	}
+	if(document.querySelector("#in_Inventory").getAttribute("val") == "1"){
+		//sections_to_display.push(3);
+		sections_on[3] = true;
+	}
+	
+	
+	
 	/*
 	draw_graph_title("player xyz");
 	draw_graph(0, 2000, 200, player_obj_x, "#graphs");
 	draw_graph(0, 2000, 200, player_obj_y, "#graphs");
 	draw_graph(0, 2000, 200, player_obj_z, "#graphs");
 	*/
+	
 
 	var title_speed = draw_graph_title("speed");
 	//draw_graph_change(player_obj_xyz_delta);
@@ -2000,8 +2261,6 @@ function draw_all_graphs(){
 		draw_graph(0, 13, 130, player_obj_xyz_delta, "red", "#graphs", true);	
 		title_speed.innerHTML += " (derived)";
 	}
-
-
 
 	draw_graph_title("afterburner");
 	draw_graph_change(player_afterburner, "#graphs");
@@ -2031,75 +2290,209 @@ function draw_all_graphs(){
 	persistantHUDmessages[1]="...";
 	draw_graph_title("perHUD messages");
 	draw_label_band(persistantHUDmessages);
+	
+	//--------------------------------------------------------------
+
+	var css_height = 660;
+	var css1 = "";
+	
+	if(sections_on[1]){
+		
+		css_height += 270;
+		
+		var sec1 = draw_graph_title("[MSafe]");
+		sec1.setAttribute("section",1);
+		//sec1.addEventListener("click", ()=>{toggle_graph_section(1)});
+		draw_separation(96);
+		
+		css1 = "100px repeat(7, 25px)";
+			
+		draw_graph_title("player room").setAttribute("in_section",1);
+		draw_label_band(player_obj_room).setAttribute("in_section",1);
+		
+		MSafe_rooms[0] = "...";
+		draw_graph_title("MSafe_rooms").setAttribute("in_section",1);
+		draw_label_band(MSafe_rooms).setAttribute("in_section",1);
+		
+		MSafe_doors[0] = "...";
+		draw_graph_title("MSafe_doors").setAttribute("in_section",1);
+		draw_label_band(MSafe_doors).setAttribute("in_section",1);
+		
+		MSafe_sounds[0] = "...";
+		draw_graph_title("MSafe_sounds").setAttribute("in_section",1);
+		draw_label_band(MSafe_sounds).setAttribute("in_section",1);
+		
+		MSafe_misc[0] = "...";
+		draw_graph_title("MSafe_misc").setAttribute("in_section",1);
+		draw_label_band(MSafe_misc).setAttribute("in_section",1);
+		
+		MSafe_objects[0] = "...";
+		draw_graph_title("MSafe_objects").setAttribute("in_section",1);
+		draw_label_band(MSafe_objects).setAttribute("in_section",1);
+		
+		MSafe_inventory[0] = "...";
+		draw_graph_title("MSafe_inventory").setAttribute("in_section",1);
+		draw_label_band(MSafe_inventory).setAttribute("in_section",1);
+		
+	}
+
 
 	
-	draw_graph_title("player room");
-	draw_label_band(player_obj_room);
 
-
-
-
-	draw_graph_title("");
-	draw_separation(96);
-
-
-	draw_graph_title("foes fire");
-	draw_graph_change(weapon_fire_foes, "#graphs");
-
-	weapon_objnum_foes[1] = "...";
-	draw_graph_title("foe who fires");
-	draw_label_band(weapon_objnum_foes);
-
-	weapon_fire_unid_foes[1] = "...";
-	draw_graph_title("foe weapon");
-	draw_label_band(weapon_fire_unid_foes);
-
-	killed_objects[1]="...";
-	draw_graph_title("killed objects");
-	draw_label_band(killed_objects);
-
-	draw_graph_title("");
-	draw_separation(96);
+	var css2 = "";
 	
-	draw_graph_title("player fire");
-	draw_graph_change(weapon_fire_player, "#graphs");
+	if(sections_on[2]){
+		
+		css_height += 200;
+		
+		var sec2 = draw_graph_title("[Combat]")
+		sec2.setAttribute("section",2);
+		//sec2.addEventListener("click", ()=>{toggle_graph_section(2)});
+		draw_separation(96);
+		
+		css2 = "100px 32px repeat(3, 25px)";
+		
+		draw_graph_title("foes fire").setAttribute("in_section",2);
+		draw_graph_change(weapon_fire_foes, "#graphs").setAttribute("in_section",2);
 
-	weapon_fire_unid_player[1] = "...";
-	draw_graph_title("player weapon");
-	draw_label_band(weapon_fire_unid_player);
+		weapon_objnum_foes[1] = "...";
+		draw_graph_title("foe who fires").setAttribute("in_section",2);
+		draw_label_band(weapon_objnum_foes).setAttribute("in_section",2);
 
-	draw_graph_title("vauss");
-	draw_graph_change(player_ammo_vauss, "#graphs");
+		weapon_fire_unid_foes[1] = "...";
+		draw_graph_title("foe weapon").setAttribute("in_section",2);
+		draw_label_band(weapon_fire_unid_foes).setAttribute("in_section",2);
 
-	draw_graph_title("massdriver");
-	draw_graph_change(player_ammo_massdriver, "#graphs");
+		killed_objects[1]="...";
+		draw_graph_title("killed objects").setAttribute("in_section",2);
+		draw_label_band(killed_objects).setAttribute("in_section",2);
+	}
 
-	draw_graph_title("napalm");
-	draw_graph_change(player_ammo_napalm, "#graphs");
+	
+	var css3 = "";
+	
+	if(sections_on[3]){
+		
+		css_height += 600;
+		
+		var sec3 = draw_graph_title("[Inventory]")
+		sec3.setAttribute("section",3);
+		//sec3.addEventListener("click", ()=>{toggle_graph_section(3)});
+		draw_separation(96);
+		
+		css3 = "100px 34px 25px repeat(20, 34px)";
+		
+		draw_graph_title("player fire").setAttribute("in_section",3);
+		draw_graph_change(weapon_fire_player, "#graphs").setAttribute("in_section",3);
 
-	draw_graph_title("concussion");
-	draw_graph_change(player_ammo_concussion, "#graphs");
-	draw_graph_title("homing");
-	draw_graph_change(player_ammo_homing, "#graphs");
-	draw_graph_title("guided");
-	draw_graph_change(player_ammo_guided, "#graphs");
-	draw_graph_title("frag");
-	draw_graph_change(player_ammo_frag, "#graphs");
-	draw_graph_title("impact");
-	draw_graph_change(player_ammo_impact, "#graphs");
-	draw_graph_title("napalm_rocket");
-	draw_graph_change(player_ammo_napalm_rocket, "#graphs");
-	draw_graph_title("smart");
-	draw_graph_change(player_ammo_smart, "#graphs");
-	draw_graph_title("cyclone");
-	draw_graph_change(player_ammo_cyclone, "#graphs");
-	draw_graph_title("mega");
-	draw_graph_change(player_ammo_mega, "#graphs");
-	draw_graph_title("blackshark");
-	draw_graph_change(player_ammo_blackshark, "#graphs");
+		weapon_fire_unid_player[1] = "...";
+		draw_graph_title("player weapon").setAttribute("in_section",3);
+		draw_label_band(weapon_fire_unid_player).setAttribute("in_section",3);
+
+		draw_graph_title("vauss").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_vauss, "#graphs").setAttribute("in_section",3);
+
+		draw_graph_title("massdriver").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_massdriver, "#graphs").setAttribute("in_section",3);
+
+		draw_graph_title("napalm").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_napalm, "#graphs").setAttribute("in_section",3);
+
+		draw_graph_title("concussion").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_concussion, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("homing").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_homing, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("guided").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_guided, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("frag").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_frag, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("impact").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_impact, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("napalm_rocket").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_napalm_rocket, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("smart").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_smart, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("cyclone").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_cyclone, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("mega").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_mega, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("blackshark").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_blackshark, "#graphs").setAttribute("in_section",3);
+	}
 
 
+	document.querySelector("#graph_titles").style.setProperty("grid-template-rows",
+	"repeat(4, 138px) repeat(4, 25px) "  +css1 +css2 +css3);
+	document.querySelector("#graph_wrapper").style.setProperty("height", css_height + "px");
+	//reticle_g height, top
 }
+
+/*
+function toggle_graph_section(n){
+	
+	var tab = document.querySelector("#graph_wrapper").getAttribute("displayed_section").split(",");
+	var idx = tab.indexOf(""+n);
+	if(idx < 0){
+		tab.push(n);
+		draw_all_graphs(tab);
+	} else {
+		tab.splice(idx,1);
+		draw_all_graphs(tab);
+	}
+	
+}
+*/
+
+
+/*
+function toggle_graph_section(n){
+	
+	var tab = document.querySelector("#graph_wrapper").getAttribute("displayed_section").split(",");
+	var idx = tab.indexOf(""+n);
+	
+	if(idx < 0){
+		tab.push(n);
+		for(el of document.querySelectorAll(".graph_title[in_section='"+n+"']")){
+		
+			el.removeAttribute("hidden");
+		}
+	} else {
+		tab.splice(idx,1);
+		for(el of document.querySelectorAll(".graph_title[in_section='"+n+"']")){
+		
+			el.setAttribute("hidden", 1);
+		}
+	}
+	
+	document.querySelector("#graph_wrapper").setAttribute("displayed_section", tab);
+	
+	var css1 = "25px ";
+	var css2 = "25px ";
+	var css3 = "25px ";
+	if(tab.includes(1)){
+		css1 = "100px repeat(7, 25px) ";
+	}
+	if(tab.includes(2)){
+		css2 = "100px 32px repeat(3, 25px) ";;
+	}
+	if(tab.includes(3)){
+		css3 = "100px 34px 25px repeat(20, 34px) ";
+	}
+	
+	document.querySelector("#graph_titles").style.setProperty("grid-template-rows",
+	"repeat(4, 138px) repeat(4, 25px) "  +css1 +css2 +css3);
+	
+} */
+
+	//document.querySelector(".graph_title[section='" + n + "']");
+	
+	/*
+	var sheet = window.document.styleSheets[0];
+	var rule = ".graph_title[in_section='"+n+"'] { \
+					display: none; \
+				}"
+	sheet.insertRule(rule, sheet.cssRules.length);
+	*/
 
 
 window.addEventListener("mousemove", ()=> {
