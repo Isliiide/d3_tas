@@ -429,6 +429,8 @@
 #include "hlsoundlib.h"
 #include "sounds.h"
 
+#include "gameloop.h" // islide, needs get_slomo_factor() to fix fusion gun
+
 
 float Key_ramp_speed = 0.5f;
 
@@ -1614,12 +1616,12 @@ void DoKeyboardWeapons(game_controls *controls) {
   if (fire_primary_key_time.value > 0) {
     controls->fire_primary_down_state = true;
     controls->fire_primary_down_count = 1;
-    controls->fire_primary_down_time = fire_primary_key_time.value;
+    controls->fire_primary_down_time = fire_primary_key_time.value / get_slomo_factor(); //islide
   }
 
   if (fire_secondary_key_time.value > 0) {
     controls->fire_secondary_down_count = 1;
-    controls->fire_secondary_down_time = fire_secondary_key_time.value;
+    controls->fire_secondary_down_time = fire_secondary_key_time.value / get_slomo_factor(); //islide
   }
 
   // flare

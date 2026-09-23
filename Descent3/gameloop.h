@@ -131,6 +131,8 @@ void ResumeGame();
 //   looks in the file d3_tas_config.txt and updates the wanted value from it
 //   this is used across a number of .cpp files to conveniently read from this config file
 int update_value_from_config_file(const char *name_of_value, int *value_to_update);
+int get_slomo_factor();
+
 
 
 
