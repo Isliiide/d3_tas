@@ -132,7 +132,7 @@ outline: 1px solid grey;
 }
 
 .graph_title[section] {
-  --padding-top: 72px;
+  padding-top: 72px;
   color: #b97100;
   --cursor: pointer;
 }
@@ -796,7 +796,8 @@ function DemoReadHudMessage(){
 	
 	if((buf.split("GameFrame")[0].length > 0) && 
 		(buf.split("GrameFrame")[0].length > 0) &&
-		(buf.split("velocity")[0].length > 0)){ // if message doesn't start with "GrameFrame" // yes there's a typo
+		(buf.split("velocity")[0].length > 0) &&
+		(buf.split("rotvel")[0].length > 0)){ // if message doesn't start with "GrameFrame" // yes there's a typo
 
 		if(buf.split("GB:").length != 2){
 			HUDmessages[globals.count_newFrame] = buf;
@@ -860,6 +861,7 @@ function DemoReadObj(){
 	if(obj_num == 0){
 
 		//make_label("room_num");		player_obj_room[gcnf] = read4();
+		
 		
 		make_label("room_num");		player_obj_room_new = read4();
 
@@ -2523,5 +2525,4 @@ window.addEventListener("mousemove", ()=> {
 
 
 </script>
-
 
