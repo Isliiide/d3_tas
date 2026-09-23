@@ -97,18 +97,44 @@ int lnxsound::InitSoundLib(char mixer_type, oeApplication *sos, uint8_t max_soun
   spec.format = SOUNDLIB_SAMPLE_SIZE == 8 ? SDL_AUDIO_U8 : SDL_AUDIO_S16;
   spec.channels = SOUNDLIB_CHANNELS;
 
-
-  //islide
+  // islide
   //-------------------------------
-  std::ifstream spec_file;
-  spec_file.open("hackAudioSampleRate.txt");
-  int hackedSampleRate;
-  if (spec_file) {
+  //std::ifstream spec_file;
+  //spec_file.open("hackAudioSampleRate.txt");
+  //int hackedSampleRate = 22050;
+  //if (spec_file) {
+
+    //spec_file >> hackedSampleRate;
+    //spec_file.close();
+    //spec.freq = hackedSampleRate;
+  //}
+
+  std::ifstream tas_config;
+  tas_config.open("d3_tas_config.txt");
+
+  int slomoFactor = 1;
+
+  if (tas_config.good()) {
   
-    spec_file >> hackedSampleRate;
-    spec_file.close();
-    spec.freq = hackedSampleRate;
+    const char *name_of_value = "slomoAudioFactor";
+    int *value_to_update = &slomoFactor;
+    char variable_name_buffer[64] = {};
+    int int_buffer = 0;
+
+    int expecting_n_vars = 4; // hardcoded
+    for (int i = 0; i < expecting_n_vars; i++) {
+
+      tas_config >> variable_name_buffer;
+      if (strcmp(variable_name_buffer, name_of_value) == 0) {
+        tas_config >> int_buffer;
+        *value_to_update = int_buffer;
+      }
+      tas_config >> int_buffer;
+    }
   }
+
+  spec.freq = 22050/slomoFactor;
+
   //-------------------------------
 
 

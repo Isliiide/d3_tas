@@ -406,6 +406,8 @@ void demo_jump_to_frame(int val) { //val should be +1 or -1 ; or 0 for reset
 
   if (val == 0) { //reset of wanted_start_frame
 
+   
+    /*
     std::ifstream start_demo_on_wanted_frame;
     start_demo_on_wanted_frame.open("hackDemoStartFrame.txt");
 
@@ -417,6 +419,11 @@ void demo_jump_to_frame(int val) { //val should be +1 or -1 ; or 0 for reset
     
       wanted_start_frame = 0;
     }
+    */
+
+    update_value_from_config_file("demoStartFrame", &wanted_start_frame);
+
+
 
   } else {
 

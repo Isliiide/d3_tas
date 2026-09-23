@@ -1,0 +1,34 @@
+fixedGameFrameRate 1
+slomoFactor 4
+slomoAudioFactor 1
+demoStartFrame 500
+
+
+
+
+//fixedGameFrameRate 0 or 1
+
+//slomoFactor 1 or 2 or 4 or 8
+//slomAudioFactor 1 or 2 or 4 or 8
+
+
+//demoStartFrame (any number)
+
+//------------------------------------
+//not implemented yet
+
+autoRecordDemo 1
+verboseHUDmessages 1
+afterburnerHack 1
+diagonalControls 0
+
+
+//autoRecordDemo 0 or 1
+
+//verboseHUDmessages 0 or 1
+
+
+
+//afterburnerHack 0 or 1
+
+//diagonalControls 0 or 1

@@ -2454,16 +2454,20 @@ void DoFlyingControl(object *objp) {
 
     velocity_old = objp->mtype.phys_info.velocity;
 
-    //ss_velocity.clear();
-    float vx = objp->mtype.phys_info.velocity.x();
-    float vy = objp->mtype.phys_info.velocity.y();
-    float vz = objp->mtype.phys_info.velocity.z();
-    AddHUDMessage("velocity %f %f %f", vx, vy, vz);
+    bool verbose_HUD_messages = true;
+    if (verbose_HUD_messages) {
 
-    float rvx = objp->mtype.phys_info.rotvel.x();
-    float rvy = objp->mtype.phys_info.rotvel.y();
-    float rvz = objp->mtype.phys_info.rotvel.z();
-    AddHUDMessage("rotvel %f %f %f", rvx, rvy, rvz);
+      // ss_velocity.clear();
+      float vx = objp->mtype.phys_info.velocity.x();
+      float vy = objp->mtype.phys_info.velocity.y();
+      float vz = objp->mtype.phys_info.velocity.z();
+      AddHUDMessage("velocity %f %f %f", vx, vy, vz);
+
+      float rvx = objp->mtype.phys_info.rotvel.x();
+      float rvy = objp->mtype.phys_info.rotvel.y();
+      float rvz = objp->mtype.phys_info.rotvel.z();
+      AddHUDMessage("rotvel %f %f %f", rvx, rvy, rvz);
+    }
     //------------------------------
   }
 

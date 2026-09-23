@@ -886,8 +886,37 @@ int count_gameFrame_substep = 0;
 int slomo_factor = 1; // islide better than skip_factor, this one slows down all of the physics computation
 
 int get_slomo_factor() { // to communicate with sdlsounds
-  return slomo_factor; 
+  return slomo_factor;
 } 
+
+
+int update_value_from_config_file(const char *name_of_value, int *value_to_update) {
+
+  std::ifstream tas_config;
+  tas_config.open("d3_tas_config.txt");
+
+  if (!tas_config.good()) {
+    return -1;
+  }
+
+  char variable_name_buffer[64] = {};
+  int int_buffer = 0;
+
+  int expecting_n_vars = 4; // hardcoded
+  for (int i = 0; i < expecting_n_vars; i++) {
+
+    tas_config >> variable_name_buffer;
+    if (strcmp(variable_name_buffer, name_of_value) == 0) {
+      tas_config >> int_buffer;
+      *value_to_update = int_buffer;
+    }
+    tas_config >> int_buffer;
+  }
+  
+  return 0;
+}
+
+int fixed_game_frame_rate = 0; // islide
 
 //----------------------
 
@@ -1385,12 +1414,23 @@ void ProcessNormalKey(int key) {
        		one_more_step = true;
 	} else {
 		//skip_factor = (skip_factor+2)%8; // 0 or 2 or 4 or 6
+
+                /*
 		slomo_factor = slomo_factor*2; // 1 or 2 or 4 or 8
 		
 		if(slomo_factor == 16 ){
 			slomo_factor = 1;
 			
 		}
+                */
+
+                if (slomo_factor == 1) {
+                  update_value_from_config_file("slomoFactor", &slomo_factor);
+                } else {
+                  slomo_factor = 1;
+                }
+
+              
 
                 //Sound_system.ChangeSampleRate(22050/slomo_factor); //as of now, this causes crashes
 
@@ -2902,10 +2942,10 @@ void CalcFrameTime(void) {
 	
     Frametime = static_cast<float>(current_timer - last_timer) / (1000.0f * slomo_factor);  // / 1000.0f;  // <---- ? islide
     
-    //////////////////////////////
-    //Frametime = static_cast<float>(16) / (1000.0f * slomo_factor); // islide : making it constant for deterministic play
-    ///////////////////////////////////
-
+    if (fixed_game_frame_rate) {
+      Frametime = static_cast<float>(16.67) / (1000.0f * slomo_factor); // islide : making it constant for deterministic play
+    }
+  
 
   } else {
     Frametime = 0.0f;
@@ -3040,12 +3080,21 @@ void StartTerrainSound() {
 
 
 
+
 // The main loop for D3.  It renders, gets input, etc. for one frame
 extern bool Skip_render_game_frame;
 void GameFrame(void) {
 #ifdef USE_RTP
   INT64 curr_time;
 #endif
+
+  //islide
+  if (count_gameFrame == 0) {
+  
+      update_value_from_config_file("fixedGameFrameRate", &fixed_game_frame_rate);
+      //
+  
+  }
 
 
   bool is_game_idle = !Descent->active();
@@ -3132,7 +3181,12 @@ void GameFrame(void) {
     if (Demo_flags != DF_PLAYBACK) {
       // AddHUDMessage("GameFrame : %d + %d/%d", count_gameFrame, (count_gameFrame_substep+1), slomo_factor);
       // //Frames_counted); // islide
-      AddHUDMessage("GameFrame : %d + %d / 8", count_gameFrame, count_gameFrame_substep); // Frames_counted); // islide
+      bool verbose_HUD_message = true;
+      if (verbose_HUD_message) {
+        AddHUDMessage("GameFrame : %d + %d / 8", count_gameFrame,
+                      count_gameFrame_substep); // Frames_counted); // islide
+      }
+      
     }
 
     if (step_by_step && !one_more_step) {
