@@ -451,9 +451,29 @@ void demo_jump_to_frame(int val) { //val should be +1 or -1 ; or 0 for reset
   set_should_sandbag_playback(false);
   //demo_current_frame = 0;
 
+
+
   for (int i = 0; i < wanted_start_frame; i++) {
 
     DemoFrame();
+   
+    ObjDoFrameAll();
+    //DoMatcensFrame();
+    //Level_goals.DoFrame();
+    DoorwayDoFrame();
+    DoPlayerFrame();
+    //DoWeatherForFrame();
+    //DoAmbientSounds();
+    //UpdateTerrainSound();
+
+    /*
+    tOSIRISEventInfo ei;
+    ei.evt_interval.frame_time = Frametime;
+    ei.evt_interval.game_time = Gametime;
+    Osiris_CallLevelEvent(EVT_INTERVAL, &ei);
+    Osiris_ProcessTimers();
+    Cinematic_Frame();
+    */
 
     //normally demo aborts on eof/bad_opcode and shows final menu, but let's not do another DemoFrame
     if (get_demo_eof()) {
@@ -1601,14 +1621,19 @@ void DemoFrame() {
         float tdelta = timer_GetTime();
 
         while ((Gametime + Demo_frame_ofs) < Demo_next_frame) {
+          //trap loop to simulate 'sleep'
           Demo_frame_ofs = timer_GetTime() - tdelta;
         }
       }
     }
-  } else {
+
+  } else { //islide
+
     Gametime = Demo_next_frame;
     Demo_frame_time = 0;
     Demo_first_frame = false;
+   // Demo_frame_ofs = Demo_next_frame - Gametime; 
+   // Frametime = Demo_next_frame - Gametime; // already updated in DemoReadNewFrame
   }
 
 
