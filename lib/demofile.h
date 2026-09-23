@@ -284,6 +284,7 @@ struct hacked_velocity {
 };
 
 hacked_velocity get_hacked_velocity();
+hacked_velocity get_hacked_rotvel();
 
 int get_game_frame_number();
 

@@ -1,0 +1,2529 @@
+<script>
+/*
+written by Islide @ decent 3 speedrun.com
+
+known issues :
+- I'm filtering "GrameFrame" hud messages, which should be corrected to "GameFrame" once the game is updated too
+- The build of the game I had was writing opcode 0x13 instead of 0x14, hence creating faulty demo files, but the problem isn't due to this parser 
+(problem on lv7 demo files, where this opcode is often used)
+- the method for skipping header bytes and going straight to the recorded demo data may fail on levels not from the original d3 campaign (if the level has a name different than "level2" per say)
+
+the parser hasn't been tested in multiplayer, so there's no garantee it works (especially the assumption that player = obj # 0, which surely only works in single player mode)
+
+
+
+the function DemoWriteAttachObj was writing the wrong opcode (0x13 instead of 0x14), causing trouble with demo playback
+
+*/
+</script>
+
+<style>
+
+body {
+background: #3b3b3b;
+ font-size: 14px;
+ font-family: consolas;
+--color:white;
+}
+  
+.data_div  {
+ background: #232323;
+	
+	  font-weight: normal;
+	 border : 1px solid black;
+	 margin-top: 10px;
+	 padding: 10px;
+	display: none;
+  	grid-template-columns: repeat(4, 140px 200px);
+ }
+ 
+ .data_label {
+
+	color: white;
+
+}
+
+
+
+.data_val {
+
+	color:#ffcb00;
+}
+
+.data_title {
+background: #dab764;
+  padding: 4px;
+}
+
+.data_title[header]{
+
+	background : pink;
+	border: 1px solid black;
+	margin: 6px;
+}
+
+.data_title[new_frame]{
+
+	background : #3e00e9;
+	border: 1px solid black;
+	margin: 6px;
+}
+
+.data_title[read_obj]{
+
+	background : #505050;
+	--border: 1px solid black;
+	--margin: 6px;
+}
+
+.data_title[hud_msg]{
+	background: #c48100;
+}
+
+.data_title[hud_msg] .data_div {
+	display:grid;
+}
+
+.data_title[new_frame]>.data_div {
+
+	display: grid;
+}
+
+.data_title>.data_title:hover>.data_div {
+
+	display: grid;
+}
+
+.data_title>.data_title:hover {
+
+	outline: 2px black solid;
+}
+
+
+#main_div{
+	--display:none;
+}
+
+#graph_wrapper{
+
+	display: grid;
+	grid-template-columns: 140px auto;
+height: 1736px;
+  overflow: hidden;
+}
+
+#graph_titles{
+	display: grid;
+  grid-template-rows: repeat(4, 138px) repeat(4, 25px)  100px  repeat(7, 25px) 100px 32px repeat(3, 25px) 100px 34px 25px repeat(20, 34px);
+
+}
+
+.graph_title {
+  font-weight: bold;
+  color: #9d9d9d;
+  width: 129px;
+  --position: absolute;
+  margin-top: 0px;
+margin-left: -30px;
+  padding-left: 40px;
+  background: #000;
+padding-top: 4px;
+outline: 1px solid grey;
+}
+
+.graph_title[section] {
+  padding-top: 72px;
+  color: #b97100;
+  --cursor: pointer;
+}
+
+.graph_title[section]:hover {
+  --color: white;
+}
+
+.graph {
+	--height : 100px;
+	--max-width: 100%;
+	margin-top: 4px;
+}
+
+#graphs_ret {
+  background: #151515;
+width: 100%;
+overflow-x: scroll;
+  overflow-y: hidden;
+}
+
+#graphs{
+display : grid;
+}
+
+.graph_change {
+	--max-width: 100%;
+	margin-top: 4px;
+}
+
+.band_item {
+--outline: 1px yellow solid;
+  border-radius: 6px;
+  padding-top: 2px;
+  background: #8f8f8f;
+  color: #fff;
+  padding-bottom: 2px;
+  background: linear-gradient(90deg,rgb(162, 91, 0) 0%, rgb(0, 0, 0) 40%)
+}
+
+/*
+band_item:hover {
+  background: #994f00;
+}
+*/
+
+/*
+.band_item[unfinished]{
+outline: 1px black solid;
+  border-radius: 6px 0px 0px 6px;
+  --padding: 4px;
+  background: linear-gradient(90deg,rgba(204, 204, 204, 1) 0%, rgb(150, 150, 150) 90%, rgb(126, 126, 126) 99%);
+
+}*/
+
+.band {
+	display: block ruby;
+	margin-top: 4px;
+	--margin-left: 6px;
+
+}
+
+#cood {
+
+	position: fixed;
+  background: white;
+top: 0px;
+  left: 300px;
+}
+
+#reticle {
+
+	position: absolute;
+	border-right: 2px dashed white;
+	left: 0px;
+	top: 0px;
+	height: -1728px;
+	width: 10px;
+	 pointer-events: none;
+}
+
+#reticle_g {
+
+position: relative;
+  border-right: 2px dashed white;
+  left: -148px;
+  top: -1728px;
+  height: 1728px;
+  pointer-events: none;
+  display: flex;
+
+}
+
+#reticle_g[locked]{
+
+	border-right: 2px dashed #eecc00;
+
+}
+
+#reticle_y {
+
+	position: fixed;
+	border-bottom: 8px dotted white;
+	left: 0px;
+	top: 0px;
+	height: 50px;
+	width: 14px;
+	 pointer-events: none;
+}
+
+
+
+button[val='0'] {
+	
+	color : black;
+background: #616161;
+  border: 4px outset #616161;
+}
+
+button[val='1'] {
+	
+	color : black;
+	background: #dc9323;
+  border: 4px inset #d9944a;
+}
+
+button {
+	
+	cursor:pointer;
+	border-radius: 4px;
+
+}
+
+
+</style>
+
+
+<body>
+
+<input id="file_loader" type="file" accept=".dem" onchange="load_file(event.target.files)" >
+supplementary info :
+<button id="in_Msafe" val="0" onclick="button_toggle(this)">parse_MSafe</button>
+<button id="in_Combat" val="0" onclick="button_toggle(this)">parse_Combat</button>
+<button id="in_Inventory" val="0" onclick="button_toggle(this)">parse_Inventory</button>
+<div id="reticle_y"></div>
+<div id="cood"></div>
+<div id="graph_wrapper">
+	<div id="graph_titles"></div>
+	<div id="graphs_ret">
+		
+		<div id="graphs"></div>
+		<div id="reticle_g"></div>
+	</div>
+</div>
+
+</body>
+
+
+<script>
+
+globals = {
+	data_view: null,
+	i: 0,
+	active_div: null,
+	active_div2: null,
+	create_html: true,
+	LE: true,
+	count_newFrame: -1, // -1 for the header box
+	eof: false,
+	header_gametime: [0xFF, 0xFF, 0xFF, 0xFF],
+	should_stop_on_new_frame: false,
+};
+
+function button_toggle(e){
+	
+	if(!e.hasAttribute("val")){
+		return;
+	}
+	
+	if(e.getAttribute("val") == "0"){
+		e.setAttribute("val", "1");
+		return;
+	}
+	
+	if(e.getAttribute("val") == "1"){
+		e.setAttribute("val", "0");
+		return;
+	}
+}
+
+function dec_to_hex(dec){
+
+	if(dec < 0){
+		return "XX";
+	}
+	if(dec > 255){
+		return "XX";
+	}
+	
+	var hex_lut = ["0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"];
+	var i = dec%16;
+	var j = (dec-i)/16;
+	
+	return hex_lut[j] + hex_lut[i];
+
+}
+
+var context = {};
+
+function load_file(files){
+
+	const reader = new FileReader();
+  reader.addEventListener('loadend', (event) => {
+    //console.log(event.target.result);
+
+	document.querySelector("#cood").innerHTML = "wait for html to generate";
+	
+	console.log("file_loaded");
+	
+
+	globals.data_view = new DataView(event.target.result);
+
+	main_div = document.createElement("div");
+	main_div.setAttribute("id", "main_div");
+	document.body.appendChild(main_div);
+
+	input_div = document.createElement("div");
+	input_div.setAttribute("id", "input_div");
+	input_div.innerHTML = "<span style='color:white'>load specific frame : </span> \
+		<button onclick='change_frame(-1)'>←</button>\
+		<input onchange='create_frame_html(this.value)' value='0'></input> \
+		<button onclick='change_frame(1)'>→</button>";
+	document.body.appendChild(input_div);
+
+	res_div = document.createElement("div");
+	res_div.setAttribute("id", "input_result");
+	document.body.appendChild(res_div);
+
+	globals.active_div = main_div;
+	globals.active_div2 = main_div;
+
+
+	globals.create_html = true;
+	DemoReadHeader();
+	globals.create_html = false; 
+
+	function alert_pattern(a){ alert("failed to parse demo file, lacking pattern "+ a);}
+	/*
+	var fsm_osiris = new FSM("4F 53 49 52 49 53");
+	var fsm_level = new FSM("6C 65 76 65 6C");
+	//var fsm_a040 = new FSM("A0 40 00 00 90 42");
+	var fsm_a040 = new FSM("A0 40 00 00");
+
+	// 02 with 57 times 0x00 before, looks reliable
+
+	var i_osiris = find_first_match(globals.data_view, 0, globals.data_view.byteLength, fsm_osiris);
+	if(i_osiris == -1){
+		alert_pattern("osiris");
+		return;
+	}
+
+	var i_level = find_first_match(globals.data_view, i_osiris, globals.data_view.byteLength, fsm_level);
+	if(i_level == -1){
+		alert_pattern("level");
+		return;
+	}
+
+	var i_a040 = find_first_match(globals.data_view, i_level, globals.data_view.byteLength, fsm_a040);
+	if(i_a040 == -1){
+		alert_pattern("0xA0400000");
+		return;
+	}
+
+	
+	globals.i = i_a040 -74 ; //+2?
+	*/
+
+	var fsm_02time = new FSM("02 " + globals.header_gametime.join(" "));
+
+	var i_02time = find_first_match(globals.data_view, globals.i, globals.data_view.byteLength, fsm_02time);
+	if(i_02time == -1){
+		alert_pattern("0x02+gametime");
+		return;
+	}
+	globals.i  = i_02time -5 ;
+
+
+	//opcode
+	max_opcodes_read = 4000000;
+	for(var k=0; k < max_opcodes_read; k++){
+		if(0 == read_opcode()){
+			break;
+		}
+		if(globals.eof){
+			break;
+		}
+	}
+	
+	
+	draw_all_graphs();
+
+	document.querySelector("#file_loader").style.setProperty("background", "#cbf");
+
+
+	return;
+	
+
+  });
+
+  reader.readAsArrayBuffer(files[0]);
+	//console.log("coucou");
+}
+
+
+//----------------------------------------------------------------------------------------------
+
+
+function FSM(pattern="", state=0,  result=false) { //finalState=0
+	this.pattern = pattern.split(" ");
+	this.finalState = this.pattern.length; //finalState;
+	this.state = state;
+	this.result = result;
+	this.update = (hex) =>{
+  
+		for(var i=0; i<this.finalState; i++){
+		
+		   if((this.state == i) && hex == this.pattern[i]){
+		   
+				this.state ++;
+				this.result = (this.state == this.finalState);
+				return;
+			}
+		}
+		this.state = 0
+		this.result = false;
+		return;
+	};
+}
+
+
+
+
+function find_first_match(data_view, dv_start, dv_end, fsm){
+
+	first_match_index = -1;
+
+
+	for(var i=dv_start; i<dv_end;  i++){
+	
+		var hex = dec_to_hex(data_view.getUint8(i));
+							
+		if(fsm.result){
+			first_match_index = i;
+			break; 
+		}
+			
+		fsm.update(hex);
+	}
+	
+	console.log("found '"+fsm.pattern.join(" ")+"' at " + first_match_index);
+	return first_match_index;
+}
+
+
+
+function make_label(str){
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_label");
+	sp.innerText = str;
+
+	
+	globals.active_div.appendChild(sp);
+}
+
+function read4(is_float=false){
+
+	if(globals.data_view.byteLength - globals.i < 4){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var val;
+
+	if(is_float){
+		val = globals.data_view.getFloat32(globals.i, globals.LE); 	
+	} else {
+		val = globals.data_view.getUint32(globals.i, globals.LE); 	
+	}
+	globals.i+=4;
+
+	if(!globals.create_html){
+		return val;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = val;
+
+	
+	globals.active_div.appendChild(sp);
+	
+	return val;
+}
+
+function read2(){
+
+	if(globals.data_view.byteLength - globals.i < 2){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var val = globals.data_view.getUint16(globals.i, globals.LE); 
+	globals.i+=2;
+
+
+	if(!globals.create_html){
+		return val;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = val;
+
+	globals.active_div.appendChild(sp);
+	return val;
+}
+
+function read1(){
+
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var val = globals.data_view.getUint8(globals.i); 
+	globals.i+=1;
+
+
+	if(!globals.create_html){
+		return val;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = val;
+
+	globals.active_div.appendChild(sp);
+	return val;
+}
+
+function create_new_box(name, make_active=0){
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var d = document.createElement("div");
+	d.setAttribute("class", "data_div");
+
+	var title = document.createElement("div");
+	title.setAttribute("class", "data_title");
+	title.innerHTML = globals.i + " <b>" + name + "</b>";
+
+	//if(make_active == 2){ title.innerHTML += " ("+ globals.count_newFrame + ")"; }
+
+	title.appendChild(d);
+	
+	globals.active_div2.appendChild(title);
+
+	if(make_active == 0){
+
+	}
+	if(make_active == 1){
+
+		globals.active_div = d;
+	}
+	if(make_active == 2){
+		
+		globals.active_div = d;
+		globals.active_div2 = title;
+		document.querySelector("#main_div").appendChild(title);
+
+	}
+
+}
+//----------------------------------------------------------------
+
+
+function change_frame(val){
+
+	var my_input = document.querySelector("#input_div input");
+	var frame_n = parseInt(my_input.value,10) + val;
+	if(frame_n < 0){
+
+		my_input.value = 0;
+		return;
+	}
+
+	if(frame_n >= Object.keys(new_frames).length){
+
+		my_input.value = Object.keys(new_frames).length-1; 
+		return;
+	}
+	my_input.value = frame_n;
+
+
+	create_frame_html(frame_n);
+
+}
+
+
+function create_frame_html(frame_n_str){
+
+	var frame_n = parseInt(frame_n_str,10);
+
+	
+
+	if(frame_n < 0){
+
+		alert("invalid frame index");
+		return;
+	}
+
+	if(frame_n >= Object.keys(new_frames).length){
+
+		alert("invalid frame index");
+		return;
+	}
+
+console.log("frame_n = "+frame_n);
+
+	globals.create_html = true;
+	globals.eof = false;
+	document.querySelector("#input_result").innerHTML = "";
+		
+
+	globals.i = new_frames[frame_n]-1;
+	
+
+	var max_opcodes_read = 10000;
+	for(var k=0; k < max_opcodes_read; k++){
+		if(0 == read_opcode()){
+			break;
+		}
+		if(globals.eof){
+			break;
+		}
+		globals.should_stop_on_new_frame = true;
+		//console.log(k);
+	}
+
+	globals.should_stop_on_new_frame = false;
+	globals.create_html = false;
+
+	document.querySelector("#input_result").appendChild(document.querySelector("#main_div .data_title[new_frame]:not([header])"));
+
+	var div_blank = document.createElement("div");
+	div_blank.style.setProperty("height", "300px");
+	document.querySelector("#input_result").appendChild(div_blank);
+
+	var retg = document.querySelector("#reticle_g");
+	retg.setAttribute("locked", 1);
+	retg.style.setProperty("width", (frame_n+148)+"px");
+}
+
+
+
+function DemoReadHeader(){
+
+
+	create_new_box("DemoReadHeader0", 2);
+	globals.active_div.parentNode.setAttribute("header", 1);
+	
+
+	//--------
+	var buf ="";
+	var char = 0xff;
+	while(char != 0x00 && buf.length < 10){
+
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(char);
+	}
+	
+	make_label("D3sign");
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+	globals.active_div.appendChild(sp);
+	//--------
+
+	make_label("version");		read2();
+
+	//--------
+	var buf2 ="";
+	var char = 0xff;
+	while(char != 0x00 && buf2.length < 260){
+
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf2 += String.fromCharCode(char);
+	}
+	
+	make_label("demo_mission");
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf2;
+	globals.active_div.appendChild(sp);
+	//--------
+
+	make_label("level_num");	read4();
+
+	globals.header_gametime[0] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.header_gametime[1] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.header_gametime[2] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.header_gametime[3] = dec_to_hex(globals.data_view.getUint8(globals.i), globals.i++);
+	globals.i += -4;
+
+	make_label("demo_gametime");	read4(true);
+	make_label("frame_count");	read4();
+
+	// LGSXlateTables(Demo_cfp);
+
+  	// LGSRooms(Demo_cfp);
+
+ 	// LGSTriggers(Demo_cfp);
+
+	//lots of tricky stuff
+
+}
+
+true_velocity = {};
+HUDmessages = {};
+HUDmessages_GB = {};
+function DemoReadHudMessage(){
+
+	create_new_box("DemoReadHudMessage", 1);
+	globals.active_div.parentNode.setAttribute("hud_msg", 1);
+
+
+	make_label("color");		read4();
+	make_label("blinking");		read1();
+
+	var buf ="";
+	var char = 0xff;
+	while(char != 0x00 && buf.length < 200){
+
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(char);
+	}
+	make_label("HUDmessage");	
+	
+	if((buf.split("GameFrame")[0].length > 0) && 
+		(buf.split("GrameFrame")[0].length > 0) &&
+		(buf.split("velocity")[0].length > 0) &&
+		(buf.split("rotvel")[0].length > 0)){ // if message doesn't start with "GrameFrame" // yes there's a typo
+
+		if(buf.split("GB:").length != 2){
+			HUDmessages[globals.count_newFrame] = buf;
+		} else {
+			HUDmessages_GB[globals.count_newFrame] = buf;
+
+		}	
+	}
+
+	var buf_vel = buf.split("velocity");
+	if(buf_vel[0].length == 0){
+		
+		var buf_xyz = buf_vel[1].split(" ");
+		if(buf_xyz.length == 4){
+
+			var vx = parseFloat(buf_xyz[1]);
+			var vy = parseFloat(buf_xyz[2]);
+			var vz = parseFloat(buf_xyz[3]);
+		}
+		var true_vel = Math.sqrt(vx*vx + vy*vy + vz*vz);
+		true_velocity[globals.count_newFrame] = true_vel;
+	}
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+	globals.active_div.appendChild(sp);
+}
+
+var count_demoReadObj = 0;
+var dic_demoReadObj = {};
+
+player_obj_x = {};
+player_obj_y = {};
+player_obj_z = {};
+player_obj_room = {};
+player_obj_room_old = 0;
+
+player_obj_x_old = 0;
+player_obj_y_old = 0;
+player_obj_z_old = 0;
+player_obj_xyz_delta_old = 0;
+player_obj_xyz_delta = {}
+
+function DemoReadObj(){
+
+	
+	count_demoReadObj++;
+	var gcnf = globals.count_newFrame;
+
+	create_new_box("DemoReadObj", 1);
+	globals.active_div.parentNode.setAttribute("read_obj", 1);
+
+	make_label("obj_num");		var obj_num = read2();
+	
+	if(obj_num == 0){
+
+		//make_label("room_num");		player_obj_room[gcnf] = read4();
+		
+		
+		make_label("room_num");		player_obj_room_new = read4();
+
+		if(player_obj_room_new != player_obj_room_old){
+			player_obj_room[gcnf] = player_obj_room_new;
+			player_obj_room_old = player_obj_room_new;
+		}
+		make_label("pos_x");		player_obj_x[gcnf] = read4(true);
+		make_label("pos_y");		player_obj_y[gcnf] = read4(true);
+		make_label("pos_z");		player_obj_z[gcnf] = read4(true);
+
+		var d_x = player_obj_x_old - player_obj_x[gcnf];
+		var d_y = player_obj_y_old - player_obj_y[gcnf];
+		var d_z = player_obj_z_old - player_obj_z[gcnf];
+
+		var distance = Math.sqrt(d_x*d_x + d_y*d_y + d_z*d_z);
+
+		player_obj_xyz_delta[gcnf] = distance;
+		player_obj_x_old = player_obj_x[gcnf];
+		player_obj_y_old = player_obj_y[gcnf];
+		player_obj_z_old = player_obj_z[gcnf];
+
+
+	} else {
+		make_label("room_num");		read4();
+		make_label("pos_x");		read4(true);
+		make_label("pos_y");		read4(true);
+		make_label("pos_z");		read4(true);
+	}
+	make_label("mat_11");		read4(true);
+	make_label("mat_21");		read4(true);
+	make_label("mat_31");		read4(true);
+	make_label("mat_12");		read4(true);
+	make_label("mat_22");		read4(true);
+	make_label("mat_32");		read4(true);
+	make_label("mat_13");		read4(true);
+	make_label("mat_23");		read4(true);
+	make_label("mat_33");		read4(true);
+	
+	//if // the condition is checked in game engine
+	//make_label("player_flags");	read4();
+
+	// obj_num = 0 is surely player
+	if(obj_num == 0){
+		make_label("player_flags");	read4();
+	}
+
+/*
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+
+	var maybe_opcode = globals.data_view.getUint8(globals.i);
+	
+	if((0 < maybe_opcode) && (maybe_opcode <= 26)){    //will read 04 and this its opcode, while in fact it's player_flag=dead,so bad method
+		return;
+	} else {
+		make_label("player_flags");	read4();
+	}
+
+*/
+
+}
+
+
+new_frames = {};
+
+function DemoReadNewFrame(){
+
+	globals.count_newFrame ++;
+	new_frames[globals.count_newFrame] = globals.i;
+
+	create_new_box("DemoReadNewFrame", 2);
+	globals.active_div2.setAttribute("new_frame", 1);
+	
+	make_label("next_frame");	read4(true);
+	make_label("frame_time");	read4(true);
+}
+
+
+
+player_afterburner = {};
+
+player_info_energy = {};
+player_info_shield = {};
+player_ammo_vauss = {};
+player_ammo_napalm = {};
+player_ammo_massdriver = {};
+
+player_ammo_concussion = {};
+player_ammo_homing = {};
+player_ammo_frag = {};
+player_ammo_smart = {};
+player_ammo_guided = {};
+player_ammo_cyclone = {};
+player_ammo_impact = {};
+player_ammo_napalm_rocket = {};
+player_ammo_mega = {};
+player_ammo_blackshark = {};
+
+
+function DemoReadPlayerInfo(){
+
+	var gcnf = globals.count_newFrame ;
+	create_new_box("DemoReadPlayerInfo", 1);
+	make_label("energy");		player_info_energy[gcnf] = read2();
+	make_label("shield");		var shield = read2();
+
+	if(shield > 1000){
+		shield = -1;
+	}
+	player_info_shield[gcnf] = shield;
+	
+	make_label("ammo");		read2();
+	make_label("ammo_vauss");	player_ammo_vauss[gcnf] = read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+	make_label("ammo_mass_driver");	player_ammo_massdriver[gcnf] = read2();
+	make_label("ammo_napalm");	player_ammo_napalm[gcnf] = read2();
+	make_label("ammo");		read2();
+	make_label("ammo");		read2();
+
+	make_label("ammo_concussion");	player_ammo_concussion[gcnf] = read2();
+	make_label("ammo_homing");	player_ammo_homing[gcnf] = read2();
+	make_label("ammo_impact");	player_ammo_impact[gcnf] = read2();
+	make_label("ammo_smart");	player_ammo_smart[gcnf] = read2();
+	make_label("ammo_mega");	player_ammo_mega[gcnf] = read2();
+	make_label("ammo_frag");	player_ammo_frag[gcnf] = read2();
+	make_label("ammo_guided");	player_ammo_guided[gcnf] = read2();
+	make_label("ammo_napalmR");	player_ammo_napalm_rocket[gcnf] = read2();
+	make_label("ammo_cyclone");	player_ammo_cyclone[gcnf] = read2();
+	make_label("ammo_blackshark");	player_ammo_blackshark[gcnf] = read2();
+
+	make_label("ammo");		read2();
+
+	make_label("weapon1_idx");	read4();
+	make_label("weapon2_idx");	read4();
+	make_label("weapon_flags");	read4();
+	make_label("afterburner_time_left");	player_afterburner[gcnf] = (5-read4(true));
+	make_label("fov");		read4(true);
+	
+}
+
+function DemoReadObjCreate(){
+
+	create_new_box("DemoReadObjCreate", 1);
+	make_label("type");		read1();
+	make_label("use_orient");	var use_orient = read1();
+	make_label("id");		read2();
+	make_label("roomnum");		read4();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("parent_handle");	read4();
+	make_label("type");		read1();
+	make_label("type");		read1();
+
+	if(use_orient == 1){
+
+		//globals.LE = false;
+		make_label("mat_11");	read4(true);
+		make_label("mat_21");	read4(true);
+		make_label("mat_31");	read4(true);
+		make_label("mat_12");	read4(true);
+		make_label("mat_22");	read4(true);
+		make_label("mat_32");	read4(true);
+		make_label("mat_13");	read4(true);
+		make_label("mat_23");	read4(true);
+		make_label("mat_33");	read4(true);
+		//globals.LE = true;
+
+	}
+
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var maybe_opcode = globals.data_view.getUint8(globals.i);
+	
+	if((0 < maybe_opcode) && (maybe_opcode <= 26)){
+		return;
+	} else {
+		make_label("oldobjnum");	read2();   
+
+	}
+
+
+}
+
+
+function DemoReadObjAnimChange(){
+
+	create_new_box("DemoReadObjAnimChange", 1);
+	make_label("changetime");	read4(true);
+	make_label("objnum");		read2();
+	make_label("servertime");	read4(true);
+	make_label("anim_frame");	read2();
+	make_label("is_start");		read1();
+	make_label("is_end");		read1();
+	make_label("anim_time");	read4(true);
+	make_label("maxspeed");		read4(true);
+	make_label("flags");		read1();
+	make_label("sound_index");	read2();
+
+}
+
+function DemoRead3DSound(){
+
+	create_new_box("DemoRead3DSound", 1);
+	make_label("objnum");		read2();
+	make_label("soundidx");		read2();
+	make_label("volume");	read4(true);
+}
+
+
+
+weapon_fire_foes = {};
+weapon_objnum_foes = {}; 		objnum_old = 0;		
+weapon_fire_unid_foes = {};		unid_foes_old = 0;
+
+weapon_fire_player = {};
+weapon_fire_unid_player = {};		unid_player_old = {};
+
+lut_unid={
+	1824061605: "flare",
+	3160918772: "laser",
+	3944212815: "superlaser",
+	2156179626: "vauss",
+	1759240681: "massdriver",
+	3556852988: "napalm",
+	1931104075: "microwave",
+	2335156110: "plasma",
+	1897546053: "EMDgun",
+	1263968229: "fusion",
+	2387066691: "omega",
+	//missiles
+	2796992103: "frag",
+	3714725265: "homing",
+	890741753: "concussion",
+	1299777288: "guided",
+	4065407020: "impact",
+	2937868739: "napalm_rocket",
+	2658369423: "smart",
+	3425862777: "cyclone",
+	3203023390: "mega",
+	1202695974: "blackshark",
+	//foes
+	1647401610: "pink_laser",
+	1274890157: "red_laser",
+	1890994463: "foe_microwave",
+	1745946762: "foe_plasma",
+	4216830439: "green_laser",
+	4142173037: "foe_vauss",
+	442468024: "foe_homing",
+}
+
+
+function DemoReadWeaponFire(){
+
+	create_new_box("DemoReadWeaponFire", 1);
+	make_label("gametime");		read4(true);
+	make_label("old_objnum");	var objnum = read2();
+	make_label("unique_id_weapon");	var unid = read4();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("vec_x_normal");	read4(true);
+	make_label("vec_y_normal");	read4(true);
+	make_label("vec_z_normal");	read4(true);
+	make_label("weapobjnum");	read2();
+	make_label("gunnum");		read2();
+
+	
+	if(objnum == 0) { // i guess it's player
+		
+		weapon_fire_player[globals.count_newFrame] = Object.keys(weapon_fire_player).length;
+
+		if(unid != unid_player_old){
+
+			var unid_str = unid;
+			if(Object.keys(lut_unid).includes(unid+"")){
+				unid_str = lut_unid[unid];
+			}
+
+			weapon_fire_unid_player[globals.count_newFrame] = unid_str;
+			unid_player_old = unid;
+
+		}
+	} else {
+
+		weapon_fire_foes[globals.count_newFrame] = Object.keys(weapon_fire_foes).length; 
+
+		if(objnum != objnum_old){
+			weapon_objnum_foes[globals.count_newFrame] = objnum;
+			objnum_old = objnum;
+		}
+		if(unid != unid_foes_old){
+
+			var unid_str = unid;
+			if(Object.keys(lut_unid).includes(unid+"")){
+				unid_str = lut_unid[unid];
+			}
+
+			weapon_fire_unid_foes[globals.count_newFrame] = unid_str;
+			unid_foes_old = unid;
+		}
+	}
+	
+	//weapon_fire[globals.count_newFrame] = unid; //i want this to change every time
+}
+
+function DemoReadObjWeapFireFlagChanged(){
+
+	create_new_box("DemoReadObjWeapFireFlagChanged", 1);
+	make_label("weaponnum");	read2();
+	make_label("weapon_flags");	read1();
+}
+
+
+killed_objects = {}
+function DemoReadKillObject(){
+
+	
+
+	create_new_box("DemoReadKillObject", 1);
+	make_label("objnum");		killed_objects[globals.count_newFrame] = read2();
+	make_label("killer");		read2();
+	make_label("damage");		read4(true);
+	make_label("death_flags");	read4();
+	make_label("delay");		read4(true);
+	make_label("seed");		read2();
+}
+
+
+MS_lut = {
+	0: "ROOM_TEXTURE",
+	1: "ROOM_WIND",
+	2: "ROOM_FOG",
+	3: "ROOM_LIGHT_PULSE",
+	4: "PORTAL_RENDER",
+	5: "ROOM_FOG_STATE",
+	6: "ROOM_CHANGING_FOG",
+	7: "ROOM_CHANGING_WIND",
+	8: "ROOM_DAMAGE",
+	9: "ROOM_LIGHT_FLICKER",
+	10: "ROOM_LIGHT_STROBE",
+	11: "ROOM_REFUEL",
+	12: "ROOM_HAS_PLAYER",
+	13: "ROOM_BREAK_GLASS",
+	14: "ROOM_PORTAL_BLOCK",
+	15: "ROOM_REMOVE_ALL_POWERUPS",
+	
+	20: "OBJECT_SHIELDS",
+	21: "OBJECT_ENERGY",
+	22: "OBJECT_BLANK",
+	23: "OBJECT_LIGHT_COLOR",
+	24: "OBJECT_MOVEMENT_SCALAR",
+	25: "OBJECT_RECHARGE_SCALAR",
+	26: "OBJECT_WSPEED_SCALAR",
+	27: "OBJECT_DAMAGE_SCALAR",
+	28: "OBJECT_ARMOR_SCALAR",
+	29: "OBJECT_DAMAGE_OBJECT",
+	30: "OBJECT_TYPE",
+	31: "OBJECT_ID",
+	32: "OBJECT_ADD_WEAPON",
+	33: "OBJECT_START_SPEW",
+	34: "OBJECT_STOP_SPEW",
+	35: "OBJECT_GHOST",
+	36: "OBJECT_UNGHOST",
+	37: "OBJECT_REMOVE",
+	38: "OBJECT_POS",
+	39: "OBJECT_ORIENT",
+	40: "OBJECT_ROOMNUM",
+	41: "OBJECT_VELOCITY",
+	42: "OBJECT_ROTVELOCITY",
+	43: "OBJECT_THRUST",
+	44: "OBJECT_ROTTHRUST",
+	45: "OBJECT_FLAGS",
+	46: "OBJECT_SIZE",
+	47: "OBJECT_CONTROL_TYPE",
+	48: "OBJECT_MOVEMENT_TYPE",
+	49: "OBJECT_CREATION_TIME",
+	50: "OBJECT_CLOAKALLPLAYERS",
+	51: "OBJECT_PHYSICS_FLAGS",
+	52: "OBJECT_PARENT",
+	53: "OBJECT_ROTDRAG",
+	54: "OBJECT_INVULNERABLE",
+	55: "OBJECT_CLOAK",
+	56: "OBJECT_PLAYER_HANDLE",
+	57: "OBJECT_PLAYER_CMASK",
+	58: "OBJECT_NO_RENDER",
+	59: "OBJECT_LIGHT_DIST",
+	60: "OBJECT_DEFORM",
+	61: "OBJECT_VIEWER_SHAKE",
+	62: "OBJECT_PLAYER_KEY",
+	63: "OBJECT_PLAYER_CONTROLAI",
+	64: "OBJECT_WORLD_POSITION",
+	65: "OBJECT_COUNT_TYPE",
+	66: "OBJECT_SPARKS",
+	67: "OBJECT_SETONFIRE",
+	68: "OBJECT_SHAKE_AREA",
+	69: "OBJECT_ENERGY_WEAPON",
+	70: "OBJECT_DAMAGE_AMOUNT",
+	71: "OBJECT_SHIELDS_ORIGINAL",
+	72: "SHOW_ENABLED_CONTROLS",
+	73: "OBJECT_FIRE_WEAPON",
+	74: "OBJECT_DESTROY_ROBOTS_EXCEPT",
+	
+	100: "WEATHER_RAIN",
+	101: "WEATHER_SNOW",
+	102: "WEATHER_LIGHTNING",
+	103: "WEATHER_LIGHTNING",
+	104: "WEATHER_LIGHTNING_BOLT_POS",
+	
+	110: "SOUND_2D",
+	111: "SOUND_OBJECT",
+	112: "SOUND_STREAMING",
+	113: "SOUND_STOP",
+	114: "SOUND_STOP_OBJ",
+	115: "SOUND_VOLUME_OBJ",
+	
+	//#define MSAFE_MATCEN 130
+	
+	150: "MISC_HUD_MESSAGE",
+	151: "MISC_WAYPOINT",
+	152: "MISC_END_LEVEL",
+	153: "MISC_POPUP_CAMERA",
+	154: "MISC_CLOSE_POPUP",
+	155: "MISC_GAME_MESSAGE",
+	156: "MISC_REGION",
+	157: "MISC_ENABLE_SHIP",
+	158: "MISC_LEVELGOAL",
+	159: "MISC_GUIDEBOT_NAME",
+	160: "MISC_FILTERED_HUD_MESSAGE",
+	161: "MISC_START_TIMER",
+	162: "MISC_ADD_HUD_ITEM",
+	163: "MISC_UPDATE_HUD_ITEM",
+
+	170: "DOOR_LOCK_STATE",
+	171: "DOOR_ACTIVATE",
+	172: "DOOR_POSITION",
+	173: "DOOR_STOP", 
+	174: "DOOR_OPENABLE",
+	
+	//#define MSAFE_MISSION 180
+	
+	190: "TRIGGER_SET",
+	
+	200: "INVEN_ADD_TYPE_ID",
+	201: "INVEN_CHECK",
+	202: "INVEN_COUNT",
+	203: "INVEN_REMOVE",
+	204: "INVEN_SIZE",
+	205: "INVEN_GET_TYPE_ID",
+	206: "INVEN_ADD_OBJECT",
+	207: "INVEN_CHECK_OBJECT",
+	208: "INVEN_REMOVE_OBJECT",
+	
+	210: "COUNTERMEASURE_ADD", 
+	211: "COUNTERMEASURE_COUNT",
+	212: "COUNTERMEASURE_CHECK",
+	213: "COUNTERMEASURE_REMOVE",
+	214: "COUNTERMEASURE_SIZE",
+	215: "COUNTERMEASURE_GET",
+	
+	250: "WEAPON_CHECK",
+	251: "WEAPON_ADD",
+};
+
+MSafe_doors = {};
+MSafe_sounds = {};
+MSafe_inventory = {};
+MSafe_misc = {};
+MSafe_objects = {};
+MSafe_rooms = {};
+function DemoReadMSafe(){
+
+	create_new_box("DemoReadMSafe", 1);
+	make_label("length");		var len = read2();
+	make_label("header1");		read1(); // these are normally counted in len, so we substract later
+	make_label("header2");		read2();
+	make_label("type");			
+	var type = globals.data_view.getUint8(globals.i); globals.i ++;// match with super long enum
+	
+
+	if(0 <= type && type <= 15){
+		MSafe_rooms[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(20 <= type && type <= 74){
+		MSafe_objects[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(110 <= type && type <= 115){
+		MSafe_sounds[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(150 <= type && type <= 163){
+		MSafe_misc[globals.count_newFrame] = MS_lut[type];
+	}	
+	if(170 <= type && type <= 174){
+		MSafe_doors[globals.count_newFrame] = MS_lut[type];
+	} 	
+	if(200 <= type && type <= 251){
+		MSafe_inventory[globals.count_newFrame] = MS_lut[type];
+	}	
+	
+	
+
+	//skipping
+	//globals.i += len;
+
+	if(globals.data_view.byteLength - globals.i < (len-4)){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var buf ="";
+	var cchar = 0xff;
+	for(var i=0; i<(len-4); i++){
+		cchar = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(cchar);
+	}
+		
+
+
+	if(!globals.create_html){
+		return;
+	}
+	
+	var sptype = document.createElement("span");
+	sptype.setAttribute("class", "data_val");
+	sptype.innerText = MS_lut[type];
+	
+	globals.active_div.appendChild(sptype);
+
+	make_label("multi_info");
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+	
+	//buf skip header
+	// 1
+	// 2
+	// type 1
+	//switch 0_0 like 50 possibilities ...!
+
+	globals.active_div.appendChild(sp);
+}
+
+powerups = {}
+function DemoReadPowerups(){
+
+	create_new_box("DemoReadPowerups", 1);
+	make_label("length");		var len = read2();
+
+
+	//skipping
+	//globals.i += len;
+
+	if(globals.data_view.byteLength - globals.i < len){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+
+	var buf ="";
+	var char = 0xff;
+	for(var i=0; i<len; i++){
+		char = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += char; // String.fromCharCode(char); //doesnt look like text
+	}
+	make_label("power_up_info");	
+	powerups[globals.count_newFrame] = buf;
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+
+	globals.active_div.appendChild(sp);
+
+}
+
+persistantHUDmessages = {};
+function DemoReadPersistantHUDMessage(){
+
+	create_new_box("DemoReadPersistantHUDMessage", 1);
+	globals.active_div.parentNode.setAttribute("hud_msg", 1);
+
+	make_label("color");		read4();
+	make_label("x");		read4();
+	make_label("y");		read4();
+	make_label("time");		read4(true);
+	make_label("flags");		read4();
+	make_label("sound_idx");	read4();
+	make_label("msglength");	var len = read2();
+
+	var buf ="";
+	var cchar = 0xff;
+	while(cchar != 0x00 && buf.length < 200){
+
+		if(globals.data_view.byteLength - globals.i < 1){
+			globals.eof = true;
+			console.log("EOF reached");
+			return;
+		}
+
+		cchar = globals.data_view.getUint8(globals.i); globals.i++;
+		buf += String.fromCharCode(cchar);
+	}
+	make_label("HUDmessage");
+	persistantHUDmessages[globals.count_newFrame] = buf;	
+
+
+	if(!globals.create_html){
+		return;
+	}
+
+	var sp = document.createElement("span");
+	sp.setAttribute("class", "data_val");
+	sp.innerText = buf;
+
+	
+
+	globals.active_div.appendChild(sp);
+
+}
+
+function DemoReadTurretChanged(){
+
+	create_new_box("DemoReadTurretChanged", 1);
+	make_label("time");		read4(true);
+	make_label("old_objnum");	read2();
+	make_label("turret_time");	read4(true);
+	make_label("num_turrets");	var num = read2();
+
+	if(globals.data_view.byteLength - globals.i < num*4){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	for(var i = 0; i<num; i++){
+
+		make_label("multi_info");	read4(true);
+	}
+}
+
+player_death = {};
+function DemoReadPlayerDeath(){
+
+	player_death[globals.count_newFrame] = Object.keys(player_death).length;
+
+	create_new_box("DemoReadPlayerDeath", 1);
+	make_label("playernum");	read2();
+	make_label("melee");		read1();
+	make_label("fate");		read4();
+
+}
+
+function DemoReadCollidePlayerWeapon() {
+
+	create_new_box("DemoReadCollidePlayerWeapon", 1);
+	make_label("playernum");	read2();
+	make_label("weaponnum");	read2();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("vec_x_normal");	read4(true);
+	make_label("vec_y_normal");	read4(true);
+	make_label("vec_z_normal");	read4(true);
+	make_label("normal_dir");	read1();
+}
+
+function DemoReadCollideGenericWeapon(){
+
+	create_new_box("DemoReadCollideGenericWeapon", 1);
+	make_label("generic_num");	read2();
+	make_label("weaponnum");	read2();
+	make_label("vec_x_pos");	read4(true);
+	make_label("vec_y_pos");	read4(true);
+	make_label("vec_z_pos");	read4(true);
+	make_label("vec_x_normal");	read4(true);
+	make_label("vec_y_normal");	read4(true);
+	make_label("vec_z_normal");	read4(true);
+	make_label("normal_dir");	read1();
+}
+
+function DemoReadAttachObj(){
+
+	create_new_box("DemoReadAttachObj", 1);
+	make_label("old_objnum_parent");	read2();
+	make_label("parent_ap");		read1();
+	make_label("old_objnum_child");		read2();
+	make_label("child_ap");			read1();
+	make_label("f_aligned");		read1();
+}
+
+
+function DemoReadAttachObjRad(){
+
+	create_new_box("DemoReadAttachObjRad", 1);
+	make_label("old_objnum_parent");	read2();
+	make_label("parent_ap");		read1();
+	make_label("old_objnum_child");		read2();
+	make_label("rad");			read4(true);
+}
+
+
+function DemoReadUnattachObj(){
+
+	create_new_box("DemoReadUnattachObj", 1);
+	make_label("old_objnum");	read2();
+
+}
+
+cinematics = {}
+//cinematics_length = 0;
+function DemoReadCinematics(){
+
+	create_new_box("DemoReadCinematics", 1);
+	make_label("length");		var len = read2();
+
+	//cinematics[globals.count_newFrame] = cinematics_length; cinematics_length++;  //using keys don't work if a key is overwritten on same frame
+
+	if(globals.data_view.byteLength - globals.i < len){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+	
+	//skip
+	//globals.i += len;
+
+	
+	make_label("cdi_canned");	var cdi_canned = read1();
+	
+	if(!cdi_canned){
+		
+		make_label("flags");				read4();
+		make_label("target_obj_handle");	read4();
+		make_label("end_transition");		read4();
+		make_label("start_transition");		read4();
+		make_label("path_id");				read4();
+		
+		make_label("pos_x");				read4(true);
+		make_label("pos_y");				read4(true);
+		make_label("pos_z");				read4(true);
+
+		make_label("room");					read4();
+		
+		make_label("extended");				var extended = read1();
+		
+		if(extended){
+		
+			make_label("mat_11");				read4(true);
+			make_label("mat_21");				read4(true);
+			make_label("mat_31");				read4(true);
+			make_label("mat_21");				read4(true);
+			make_label("mat_22");				read4(true);
+			make_label("mat_23");				read4(true);
+			make_label("mat_13");				read4(true);
+			make_label("mat_23");				read4(true);
+			make_label("mat_33");				read4(true);	
+			
+		} 
+		
+		make_label("max_time_play");				read4(true);	
+		make_label("text_display.max");				read4(true);
+		make_label("text_display.min");				read4(true);
+		make_label("track_target.max");				read4(true);
+		make_label("track_target.min");				read4(true);
+		make_label("player_disabled.max");				read4(true);
+		make_label("player_disabled.min");				read4(true);
+		make_label("in_camera_view.max");				read4(true);
+		make_label("in_camera_view.min");				read4(true);
+		make_label("quick_exit.max");				read4(true);
+		make_label("quick_exit.min");				read4(true);
+		
+		var len_left = len - 82 - extended*36;
+		
+		var buf ="";
+		var cchar = 0xff;
+		while(cchar != 0x00 && buf.length < len_left){
+
+			if(globals.data_view.byteLength - globals.i < 1){
+				globals.eof = true;
+				console.log("EOF reached");
+				return;
+			}
+
+			cchar = globals.data_view.getUint8(globals.i); globals.i++;
+			buf += String.fromCharCode(cchar);
+		}
+	
+		cinematics[globals.count_newFrame] = buf; 
+		make_label("text_string");
+		
+		if(globals.create_html){
+
+			var sp = document.createElement("span");
+			sp.setAttribute("class", "data_val");
+			sp.innerText = buf;
+
+			globals.active_div.appendChild(sp);
+			
+		}
+		make_label("old_camera_objnum");			read4();
+		
+		//globals.i += (len_left - buf.length - 4); //should be += 0 since we read everything
+	}
+	
+	if(cdi_canned){
+		
+		make_label("type");						read4();
+		make_label("camera_path_id");			read4();
+		make_label("target_path_id");			read4();
+		make_label("target_obj_handle");		read4(); ///////////// ????????
+		
+		make_label("time");						read4(true);
+		make_label("obj_to_use_for_point");		read4();
+		make_label("room");					read4();	
+		
+		make_label("pos_x");				read4(true);
+		make_label("pos_y");				read4(true);
+		make_label("pos_z");				read4(true);
+
+		make_label("mat_11");				read4(true);
+		make_label("mat_21");				read4(true);
+		make_label("mat_31");				read4(true);
+		make_label("mat_21");				read4(true);
+		make_label("mat_22");				read4(true);
+		make_label("mat_23");				read4(true);
+		make_label("mat_13");				read4(true);
+		make_label("mat_23");				read4(true);
+		make_label("mat_33");				read4(true);	
+
+		var len_left = len - 77;
+		
+		var buf ="";
+		var cchar = 0xff;
+		while(cchar != 0x00 && buf.length < len_left){
+
+			if(globals.data_view.byteLength - globals.i < 1){
+				globals.eof = true;
+				console.log("EOF reached");
+				return;
+			}
+
+			cchar = globals.data_view.getUint8(globals.i); globals.i++;
+			buf += String.fromCharCode(cchar);
+		}
+	
+		make_label("text_to_display");
+		cinematics[globals.count_newFrame] = buf; 
+		
+		if(globals.create_html){
+			var sp = document.createElement("span");
+			sp.setAttribute("class", "data_val");
+			sp.innerText = buf;
+
+			globals.active_div.appendChild(sp);
+			
+		}
+		
+		make_label("old_camera_objnum");		read4();
+		
+		//globals.i += (len_left - 4); //should be += 0 since we read everything
+	}
+
+}
+
+
+function DemoReadObjLifeLeft(){
+
+	create_new_box("DemoReadObjLifeLeft", 1);
+	make_label("old_objnum");		read2();
+	make_label("use_lifeleft");		var b =	read1();
+	if(b){
+		make_label("lifeleft");		read4(true);
+	}
+
+}
+
+
+var last_valid_opcode = 0;
+function read_opcode(){
+	
+	if(globals.eof){
+		return;
+	};
+
+	if(globals.data_view.byteLength - globals.i < 1){
+		globals.eof = true;
+		console.log("EOF reached");
+		return;
+	}
+
+	var opcode = globals.data_view.getUint8(globals.i); 
+	globals.i+=1;
+
+	//
+
+	switch(opcode){
+
+		case 0x01 :
+			last_valid_opcode = opcode;
+			DemoReadObj();
+			break;
+
+		case 0x02 :
+			last_valid_opcode = opcode;
+			if(globals.should_stop_on_new_frame){
+				globals.i += -1;
+				return 0;
+			} else {
+				DemoReadNewFrame();
+			}
+			break;
+	
+		case 0x03:
+			last_valid_opcode = opcode;
+			DemoReadWeaponFire();
+			break;
+
+	
+		case 0x04 :
+			last_valid_opcode = opcode;
+			DemoReadHudMessage();
+			break;
+
+		case 0x05 :
+			last_valid_opcode = opcode;
+			DemoRead3DSound();
+			break;
+
+		case 0x06 :
+			last_valid_opcode = opcode;
+			DemoReadObjCreate();
+			break;
+
+		case 0x07 :
+			last_valid_opcode = opcode;
+			DemoReadObjAnimChange();
+			break;
+		case 0x08 :
+			last_valid_opcode = opcode;
+			DemoReadTurretChanged();
+			break;
+
+		case 0x09 :
+			last_valid_opcode = opcode;
+			DemoReadKillObject();
+			break;
+
+		case 0x0a :
+			last_valid_opcode = opcode;
+			DemoReadPlayerDeath();
+			break;
+
+		case 0x0b :
+			last_valid_opcode = opcode;
+			DemoReadCollidePlayerWeapon();
+			break;
+
+		case 0x0c :
+			last_valid_opcode = opcode;
+			DemoReadCollideGenericWeapon();
+			break;
+
+		case 0x0d :
+			last_valid_opcode = opcode;
+			DemoReadAttachObj();
+			break;
+
+		case 0x0e :
+			last_valid_opcode = opcode;
+			DemoReadAttachObjRad();
+			break;
+
+		case 0x0f :
+			last_valid_opcode = opcode;
+			DemoReadUnattachObj();
+			break;
+
+		case 0x10 :
+			last_valid_opcode = opcode;
+			DemoReadObjWeapFireFlagChanged();
+			break;
+
+		case 0x11 :
+			last_valid_opcode = opcode;
+			DemoReadPlayerInfo();
+			break;
+
+		case 0x12:
+			last_valid_opcode = opcode;
+			DemoReadMSafe();
+			break;
+
+		case 0x13:
+			last_valid_opcode = opcode;
+			DemoReadPowerups();
+			break;
+
+		case 0x14:
+			last_valid_opcode = opcode;
+			DemoReadCinematics();
+			break;
+
+		case 0x15:
+			last_valid_opcode = opcode;
+			DemoReadPersistantHUDMessage();
+			break;
+	
+		//case 0x16:
+	
+			//break;
+
+		case 0x19:
+			last_valid_opcode = opcode;
+			DemoReadObjLifeLeft();
+			break;
+
+
+		default: 
+			alert("unknown opcode : " + opcode + " at " + globals.i + " (last_valid_opcode="+last_valid_opcode+")");
+			return 0;
+	}
+	return 1;
+}
+
+//------------------------------------------------------------------------
+
+globals.cur_graph_title = "";
+function draw_graph(h_min, h_max, rescale_h_to, obj_data, color, qs_append_to="#graphs", for_speed=false){
+
+
+	var keys = Object.keys(obj_data);
+	//w = keys.length;
+	w = globals.count_newFrame;
+
+
+	var can = document.createElement("canvas");
+	can.setAttribute("width", w);
+	can.setAttribute("height", rescale_h_to); //(h_max-h_min));
+	can.setAttribute("class", "graph");
+
+	var scale_h = rescale_h_to / ((h_max-h_min)*1.0);
+
+	var ctx = can.getContext("2d");
+	ctx.fillStyle = "rgb(0, 0, 0)";
+        ctx.fillRect(0, 0, w, (h_max-h_min)*scale_h);
+
+	if(for_speed){ //tracing subdivisions
+
+		var scalar = 13/400.0;
+		if(Object.keys(true_velocity).length > 0){
+			scalar = 1;
+		}
+
+		ctx.fillStyle = "rgb(100,60,0)";
+		var val1 = 80*scalar; //pyroGL one direction
+		var val2 = 160*scalar; // pyroGL afterburner + 1 dir
+		var val3 = 240*scalar; // top speed phoenix + trichord + ab
+
+		ctx.fillRect(0, (h_max - val1)*scale_h, globals.count_newFrame, 1);
+		ctx.fillRect(0, (h_max - val2)*scale_h, globals.count_newFrame, 1);
+		ctx.fillRect(0, (h_max - val3)*scale_h, globals.count_newFrame, 1);
+
+
+
+	}
+
+
+	
+	var color_lut = {
+		"red":"rgb(100, 0, 0)",
+		"red1": "rgb(255, 0, 0)",
+		"blue": "rgb(0, 0, 100)",
+		"blue1": "rgb(0, 0, 255)",
+		"yellow": "rgb(120, 100, 0)",
+		"yellow1": "rgb(255, 200, 0)",
+	};
+
+	ctx.fillStyle = color_lut[color];
+
+	var val = obj_data[0];
+	for(var i=0; i<w; i++){
+
+		 
+		if(keys.includes(""+i)){
+			//ctx.putImageData(pixel, i, obj_data[i]);
+			val = Math.max(h_min, obj_data[i]);
+			val = Math.min(h_max, obj_data[i]);
+			ctx.fillRect(i, (h_max - val)*scale_h, 1, val*scale_h);
+			
+		} 
+		ctx.fillRect(i, (h_max - val)*scale_h, 1, val*scale_h);
+
+	}
+	ctx.fillStyle = color_lut[color+"1"];
+	val = obj_data[0];
+	for(var i=0; i<w; i++){
+
+		if(keys.includes(""+i)){
+			val = obj_data[i];
+			ctx.fillRect(i, (h_max - val)*scale_h, 1, 1);
+			
+		} 
+		ctx.fillRect(i, (h_max - val)*scale_h, 1, 1);
+	}
+	
+
+	//graph_wrapper.appendChild(can);
+	document.querySelector(qs_append_to).appendChild(can);
+
+        can.addEventListener("mousemove", function (e) {
+            getMousePosition(can, e);
+        }); 
+
+        can.addEventListener("mouseup", function (e) {
+            openClickedFrame(can, e);
+        }); 
+	
+}
+
+
+function getMousePosition(canvas, event) {
+           let rect = canvas.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+
+	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | demoFrame: " + x.toFixed(0) +  "| y: " + y.toFixed(2) ;
+	//document.querySelector("#cood").style.setProperty("top", (y+10)+"px");
+	//document.querySelector("#cood").style.setProperty("left", (x+10)+"px");
+}
+
+function getMousePosition_band(band, event) {
+           let rect = band.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+
+	var content = event.target.innerText;
+
+	document.querySelector("#cood").innerHTML = "offset: " + new_frames[x.toFixed(0)] + " | frame: " + x.toFixed(0) +  "| y: " + y.toFixed(2) + " ||| " + content ;
+	//document.querySelector("#cood").style.setProperty("top", (y+10)+"px");
+	//document.querySelector("#cood").style.setProperty("left", (x+10)+"px");
+}
+
+
+
+function openClickedFrame(can, e){
+
+	 let rect = can.getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+
+	var retg = document.querySelector("#reticle_g");
+
+	if(retg.hasAttribute("locked")){
+
+		retg.style.setProperty("width", event.clientX); 
+		retg.removeAttribute("locked");
+		return;
+	}
+
+
+
+	create_frame_html(x.toFixed(0));
+	document.querySelector("#reticle_g").setAttribute("locked",1);
+	document.querySelector("#input_div input").value = x.toFixed(0);
+
+}
+
+
+
+
+function draw_graph_title(name, qs_append_to="#graph_titles"){
+
+
+	var d = document.createElement("div");
+	d.setAttribute("class", "graph_title");
+	d.innerText = name;
+	
+	document.querySelector(qs_append_to).appendChild(d);
+
+	return d;
+}
+
+
+function draw_graph_change(obj_data, qs_append_to="#graphs"){
+
+	h_min=0;
+	h_max=30;
+
+	var keys = Object.keys(obj_data);
+	//w = keys.length;
+	w = globals.count_newFrame;
+
+	var can = document.createElement("canvas");
+	can.setAttribute("width", w);
+	can.setAttribute("height", (h_max-h_min));
+	can.setAttribute("class", "graph_change");
+
+	var ctx = can.getContext("2d");
+	ctx.fillStyle = "rgb(0, 0, 0)";
+        ctx.fillRect(0, 0, w, (h_max-h_min));
+
+	var old_val = obj_data[keys[0]];
+	ctx.fillStyle = "rgb(255, 200, 0)";
+
+	var val = obj_data[keys[0]];
+	for(var i=0; i<w; i++){
+
+		if(keys.includes(""+i)){
+
+			val = obj_data[i];
+			var change = val - old_val;
+
+			if(Math.abs(change) > 1){
+				ctx.fillStyle = "rgb(255, 0, 200)";
+			}
+
+			if( change > 0 ){
+
+				ctx.fillRect(i, 0, 1, (h_max-h_min)/2);
+			}
+			if( change < 0 ){
+
+				ctx.fillRect(i,  (h_max-h_min)/2, 1, (h_max-h_min)/2);
+			}
+			if( change == 0 ){
+
+				ctx.fillRect(i,  (h_max-h_min)/2, 1, 1);
+			}
+			old_val = val;
+
+			if(Math.abs(change) > 1){
+				ctx.fillStyle = "rgb(255, 200, 0)";
+			}
+		} else {
+
+			ctx.fillRect(i,  (h_max-h_min)/2, 1, 1);
+
+		}
+	}
+
+
+	//graph_wrapper.appendChild(can);
+	document.querySelector(qs_append_to).appendChild(can);
+
+
+	  can.addEventListener("mousemove", function (e) {
+            getMousePosition(can, e);
+        }); 
+
+
+	can.addEventListener("mouseup", function (e) {
+            openClickedFrame(can, e);
+        }); 
+		
+	return can;
+}
+
+
+
+
+function draw_separation(h, qs_append_to="#graphs"){
+
+	var can = document.createElement("canvas");
+	var w = globals.count_newFrame;
+	can.setAttribute("width", w);
+	can.setAttribute("height", h);
+	can.setAttribute("class", "graph_change");
+
+	var ctx = can.getContext("2d");
+	ctx.fillStyle = "rgb(0, 0, 0)";
+        ctx.fillRect(0, 0, w, h);
+
+	document.querySelector(qs_append_to).appendChild(can);
+
+
+	  can.addEventListener("mousemove", function (e) {
+            getMousePosition(can, e);
+        }); 
+
+        can.addEventListener("mouseup", function (e) {
+            openClickedFrame(can, e);
+        }); 
+
+}
+
+
+
+
+function draw_label_band(dic, qs_append_to="#graphs"){
+
+	var band = document.createElement("div");
+	band.setAttribute("class", "band");
+
+	var keys = Object.keys(dic);
+	var x_old = 0;
+
+
+
+	for(var i = 0; i<keys.length-1; i++){
+
+		var d = document.createElement("div");
+		d.setAttribute("class", "band_item");
+		d.innerText = dic[keys[i]];
+
+		d.style.setProperty("width", (keys[i+1] - keys[i]) +"px");
+		//x_old = ;
+		
+		band.appendChild(d);
+
+	}
+
+	var d = document.createElement("div");
+	d.setAttribute("class", "band_item");
+	d.setAttribute("unfinished", 1);
+	d.innerText = dic[keys[keys.length-1]];
+
+	d.style.setProperty("width", (globals.count_newFrame - keys[keys.length-1])+"px");
+	//x_old = ;
+		
+	band.appendChild(d);
+
+	//graph_wrapper.appendChild(band);
+	document.querySelector(qs_append_to).appendChild(band);
+
+
+	band.addEventListener("mousemove", function (e) {
+      		 getMousePosition_band(band, e);
+      	  }); 
+
+        band.addEventListener("mouseup", function (e) {
+            openClickedFrame(band, e);
+        }); 
+		
+	return d;
+}
+
+function draw_all_graphs(sections_to_display=[1,2,3]){
+	
+	document.querySelector("#graph_titles").innerHTML = "";
+	document.querySelector("#graphs").innerHTML = "";
+	document.querySelector("#graph_wrapper").setAttribute("displayed_section", sections_to_display);
+	
+	sections_to_display =[];
+	sections_on = {
+		1:false,
+		2:false,
+		3:false,
+	}; 
+	if(document.querySelector("#in_MSafe").getAttribute("val") == "1"){
+		//sections_to_display.push(1);
+		sections_on[1] = true;
+	}
+	if(document.querySelector("#in_Combat").getAttribute("val") == "1"){
+		//sections_to_display.push(2);
+		sections_on[2] = true;
+	}
+	if(document.querySelector("#in_Inventory").getAttribute("val") == "1"){
+		//sections_to_display.push(3);
+		sections_on[3] = true;
+	}
+	
+	
+	
+	/*
+	draw_graph_title("player xyz");
+	draw_graph(0, 2000, 200, player_obj_x, "#graphs");
+	draw_graph(0, 2000, 200, player_obj_y, "#graphs");
+	draw_graph(0, 2000, 200, player_obj_z, "#graphs");
+	*/
+	
+
+	var title_speed = draw_graph_title("speed");
+	//draw_graph_change(player_obj_xyz_delta);
+
+	if(Object.keys(true_velocity).length > 0){
+		draw_graph(0, 400, 130, true_velocity, "red", "#graphs", true);
+		title_speed.innerHTML += " (true)";
+	} else {
+		draw_graph(0, 13, 130, player_obj_xyz_delta, "red", "#graphs", true);	
+		title_speed.innerHTML += " (derived)";
+	}
+
+	draw_graph_title("afterburner");
+	draw_graph_change(player_afterburner, "#graphs");
+	draw_graph(0, 5, 100, player_afterburner, "red", "#graphs");
+	
+	draw_graph_title("energy");
+	draw_graph_change(player_info_energy, "#graphs");
+	draw_graph(0, 200, 100, player_info_energy, "yellow",  "#graphs");
+
+	draw_graph_title("shield");
+	draw_graph_change(player_info_shield, "#graphs");
+	draw_graph(0, 200, 100, player_info_shield, "blue", "#graphs");
+	
+	cinematics[0]="...";
+	draw_graph_title("cinematics");
+	draw_label_band(cinematics);
+	
+
+	HUDmessages_GB[1]="...";
+	draw_graph_title("guidebot messages");
+	draw_label_band(HUDmessages_GB);
+
+	HUDmessages[1]="...";
+	draw_graph_title("HUD messages");
+	draw_label_band(HUDmessages);
+
+	persistantHUDmessages[1]="...";
+	draw_graph_title("perHUD messages");
+	draw_label_band(persistantHUDmessages);
+	
+	//--------------------------------------------------------------
+
+	var css_height = 660;
+	var css1 = "";
+	
+	if(sections_on[1]){
+		
+		css_height += 270;
+		
+		var sec1 = draw_graph_title("[MSafe]");
+		sec1.setAttribute("section",1);
+		//sec1.addEventListener("click", ()=>{toggle_graph_section(1)});
+		draw_separation(96);
+		
+		css1 = "100px repeat(7, 25px)";
+			
+		draw_graph_title("player room").setAttribute("in_section",1);
+		draw_label_band(player_obj_room).setAttribute("in_section",1);
+		
+		MSafe_rooms[0] = "...";
+		draw_graph_title("MSafe_rooms").setAttribute("in_section",1);
+		draw_label_band(MSafe_rooms).setAttribute("in_section",1);
+		
+		MSafe_doors[0] = "...";
+		draw_graph_title("MSafe_doors").setAttribute("in_section",1);
+		draw_label_band(MSafe_doors).setAttribute("in_section",1);
+		
+		MSafe_sounds[0] = "...";
+		draw_graph_title("MSafe_sounds").setAttribute("in_section",1);
+		draw_label_band(MSafe_sounds).setAttribute("in_section",1);
+		
+		MSafe_misc[0] = "...";
+		draw_graph_title("MSafe_misc").setAttribute("in_section",1);
+		draw_label_band(MSafe_misc).setAttribute("in_section",1);
+		
+		MSafe_objects[0] = "...";
+		draw_graph_title("MSafe_objects").setAttribute("in_section",1);
+		draw_label_band(MSafe_objects).setAttribute("in_section",1);
+		
+		MSafe_inventory[0] = "...";
+		draw_graph_title("MSafe_inventory").setAttribute("in_section",1);
+		draw_label_band(MSafe_inventory).setAttribute("in_section",1);
+		
+	}
+
+
+	
+
+	var css2 = "";
+	
+	if(sections_on[2]){
+		
+		css_height += 200;
+		
+		var sec2 = draw_graph_title("[Combat]")
+		sec2.setAttribute("section",2);
+		//sec2.addEventListener("click", ()=>{toggle_graph_section(2)});
+		draw_separation(96);
+		
+		css2 = "100px 32px repeat(3, 25px)";
+		
+		draw_graph_title("foes fire").setAttribute("in_section",2);
+		draw_graph_change(weapon_fire_foes, "#graphs").setAttribute("in_section",2);
+
+		weapon_objnum_foes[1] = "...";
+		draw_graph_title("foe who fires").setAttribute("in_section",2);
+		draw_label_band(weapon_objnum_foes).setAttribute("in_section",2);
+
+		weapon_fire_unid_foes[1] = "...";
+		draw_graph_title("foe weapon").setAttribute("in_section",2);
+		draw_label_band(weapon_fire_unid_foes).setAttribute("in_section",2);
+
+		killed_objects[1]="...";
+		draw_graph_title("killed objects").setAttribute("in_section",2);
+		draw_label_band(killed_objects).setAttribute("in_section",2);
+	}
+
+	
+	var css3 = "";
+	
+	if(sections_on[3]){
+		
+		css_height += 600;
+		
+		var sec3 = draw_graph_title("[Inventory]")
+		sec3.setAttribute("section",3);
+		//sec3.addEventListener("click", ()=>{toggle_graph_section(3)});
+		draw_separation(96);
+		
+		css3 = "100px 34px 25px repeat(20, 34px)";
+		
+		draw_graph_title("player fire").setAttribute("in_section",3);
+		draw_graph_change(weapon_fire_player, "#graphs").setAttribute("in_section",3);
+
+		weapon_fire_unid_player[1] = "...";
+		draw_graph_title("player weapon").setAttribute("in_section",3);
+		draw_label_band(weapon_fire_unid_player).setAttribute("in_section",3);
+
+		draw_graph_title("vauss").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_vauss, "#graphs").setAttribute("in_section",3);
+
+		draw_graph_title("massdriver").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_massdriver, "#graphs").setAttribute("in_section",3);
+
+		draw_graph_title("napalm").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_napalm, "#graphs").setAttribute("in_section",3);
+
+		draw_graph_title("concussion").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_concussion, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("homing").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_homing, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("guided").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_guided, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("frag").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_frag, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("impact").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_impact, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("napalm_rocket").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_napalm_rocket, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("smart").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_smart, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("cyclone").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_cyclone, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("mega").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_mega, "#graphs").setAttribute("in_section",3);
+		draw_graph_title("blackshark").setAttribute("in_section",3);
+		draw_graph_change(player_ammo_blackshark, "#graphs").setAttribute("in_section",3);
+	}
+
+
+	document.querySelector("#graph_titles").style.setProperty("grid-template-rows",
+	"repeat(4, 138px) repeat(4, 25px) "  +css1 +css2 +css3);
+	document.querySelector("#graph_wrapper").style.setProperty("height", css_height + "px");
+	//reticle_g height, top
+}
+
+/*
+function toggle_graph_section(n){
+	
+	var tab = document.querySelector("#graph_wrapper").getAttribute("displayed_section").split(",");
+	var idx = tab.indexOf(""+n);
+	if(idx < 0){
+		tab.push(n);
+		draw_all_graphs(tab);
+	} else {
+		tab.splice(idx,1);
+		draw_all_graphs(tab);
+	}
+	
+}
+*/
+
+
+/*
+function toggle_graph_section(n){
+	
+	var tab = document.querySelector("#graph_wrapper").getAttribute("displayed_section").split(",");
+	var idx = tab.indexOf(""+n);
+	
+	if(idx < 0){
+		tab.push(n);
+		for(el of document.querySelectorAll(".graph_title[in_section='"+n+"']")){
+		
+			el.removeAttribute("hidden");
+		}
+	} else {
+		tab.splice(idx,1);
+		for(el of document.querySelectorAll(".graph_title[in_section='"+n+"']")){
+		
+			el.setAttribute("hidden", 1);
+		}
+	}
+	
+	document.querySelector("#graph_wrapper").setAttribute("displayed_section", tab);
+	
+	var css1 = "25px ";
+	var css2 = "25px ";
+	var css3 = "25px ";
+	if(tab.includes(1)){
+		css1 = "100px repeat(7, 25px) ";
+	}
+	if(tab.includes(2)){
+		css2 = "100px 32px repeat(3, 25px) ";;
+	}
+	if(tab.includes(3)){
+		css3 = "100px 34px 25px repeat(20, 34px) ";
+	}
+	
+	document.querySelector("#graph_titles").style.setProperty("grid-template-rows",
+	"repeat(4, 138px) repeat(4, 25px) "  +css1 +css2 +css3);
+	
+} */
+
+	//document.querySelector(".graph_title[section='" + n + "']");
+	
+	/*
+	var sheet = window.document.styleSheets[0];
+	var rule = ".graph_title[in_section='"+n+"'] { \
+					display: none; \
+				}"
+	sheet.insertRule(rule, sheet.cssRules.length);
+	*/
+
+
+window.addEventListener("mousemove", ()=> {
+
+	retg = document.querySelector("#reticle_g");
+
+	if(retg.hasAttribute("locked")){
+		return;
+	}
+
+	//retg.style.setProperty("width", event.clientX);
+
+  	let rect = document.querySelector("#graphs").getBoundingClientRect();
+            let x = event.clientX - rect.left;
+            let y = event.clientY - rect.top;
+	retg.style.setProperty("width", x+148);
+
+
+
+	//ret.style.setProperty("top", event.clientY);
+
+	ret_y = document.querySelector("#reticle_y");
+	ret_y.style.setProperty("height", event.clientY);
+
+
+});
+
+
+
+</script>
+
+

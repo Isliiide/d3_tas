@@ -2173,6 +2173,7 @@ void DoPlayerAfterburnControl(game_controls *controls, object *objp) {
   int slot = objp->id;
 
   if (controls->afterburn_thrust > 0) {
+
     Players[slot].last_afterburner_time = Gametime;
 
     if (Players[slot].afterburn_time_left > 0) {
@@ -2182,28 +2183,35 @@ void DoPlayerAfterburnControl(game_controls *controls, object *objp) {
         AddToShakeMagnitude(objp->mtype.phys_info.mass / 2);
 
       if (Players[slot].afterburn_time_left > (AFTERBURN_TIME * .90))
-        punch_scalar = 1.8f;
-      else if (Players[slot].afterburn_time_left > (AFTERBURN_TIME * .80) &&
+        punch_scalar = 1.8f; // the highest punch_scalar is in fact this one !, when 0.45 < ab < 5.00
+
+      else if (Players[slot].afterburn_time_left > (AFTERBURN_TIME * .80) &&   // 0.40 < ab < 0.45
                Players[slot].afterburn_time_left < (AFTERBURN_TIME * .90)) {
-        float norm = Players[slot].afterburn_time_left - (AFTERBURN_TIME * .80);
-        norm /= (AFTERBURN_TIME * .1);
-        punch_scalar = 1.0 + (norm * .8);
-      }
+        float norm = Players[slot].afterburn_time_left - (AFTERBURN_TIME * .80); // at best, norm is 0.499
+        norm /= (AFTERBURN_TIME * .1); // then norm is 0.999
+        punch_scalar = 1.0 + (norm * .8); //then at best punch_scalar = 1.799
+      } 
 
       if (OBJECT_OUTSIDE(objp))
         controls->forward_thrust = controls->afterburn_thrust * 1.6 * punch_scalar;
       else
         controls->forward_thrust = controls->afterburn_thrust * 1.6 * punch_scalar;
+      // very useful line
 
       Players[slot].flags |= PLAYER_FLAGS_AFTERBURN_ON | PLAYER_FLAGS_THRUSTED;
       Players[slot].afterburn_time_left -= Frametime;
       if (Players[slot].afterburn_time_left < 0)
         Players[slot].afterburn_time_left = 0;
+
     } else {
+
       Players[slot].afterburn_time_left = 0;
       Players[slot].flags &= ~PLAYER_FLAGS_AFTERBURN_ON;
     }
-  } else {
+
+
+  } else { // if afterburner is not engaged = reloading fuel
+
     Players[slot].flags &= ~PLAYER_FLAGS_AFTERBURN_ON;
 
     if (Players[slot].afterburn_time_left < AFTERBURN_TIME) {
@@ -2221,6 +2229,10 @@ void DoPlayerAfterburnControl(game_controls *controls, object *objp) {
         Players[slot].afterburn_time_left = std::min<float>(AFTERBURN_TIME, Players[slot].afterburn_time_left);
 
         Players[slot].energy -= (useage);
+
+        //so without abcooler : thrust 2 times, then cool 2 times
+        // with abcooler :      thrust 2 times, then cool 1 times, same distance in 3/4 time, 
+        // hence 1.33 speed boost during ab mashing
       }
     }
   }
@@ -2447,6 +2459,11 @@ void DoFlyingControl(object *objp) {
     float vy = objp->mtype.phys_info.velocity.y();
     float vz = objp->mtype.phys_info.velocity.z();
     AddHUDMessage("velocity %f %f %f", vx, vy, vz);
+
+    float rvx = objp->mtype.phys_info.rotvel.x();
+    float rvy = objp->mtype.phys_info.rotvel.y();
+    float rvz = objp->mtype.phys_info.rotvel.z();
+    AddHUDMessage("rotvel %f %f %f", rvx, rvy, rvz);
     //------------------------------
   }
 

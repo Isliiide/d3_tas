@@ -1360,6 +1360,11 @@ void ProcessNormalKey(int key) {
         Objects[Players[Player_num].objnum].mtype.phys_info.velocity.y() = hackvel.vy;
         Objects[Players[Player_num].objnum].mtype.phys_info.velocity.z() = hackvel.vz;
 
+        hacked_velocity hackvel_rot = get_hacked_rotvel();
+        Objects[Players[Player_num].objnum].mtype.phys_info.rotvel.x() = hackvel_rot.vx;
+        Objects[Players[Player_num].objnum].mtype.phys_info.rotvel.y() = hackvel_rot.vy;
+        Objects[Players[Player_num].objnum].mtype.phys_info.rotvel.z() = hackvel_rot.vz;
+
         createDemoFileAndStartRec((char*)filename.c_str());
         
       }

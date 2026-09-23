@@ -464,6 +464,9 @@ hacked_velocity get_hacked_velocity() {
   return hackvel;
 }
 
+hacked_velocity hackvel_rot;
+hacked_velocity get_hacked_rotvel() { return hackvel_rot; }
+
 int game_frame_number = 0;
 int get_game_frame_number() {
 
@@ -1293,6 +1296,7 @@ void DemoReadHudMessage() {
   //velocity hack
   float vx, vy, vz;
   char str[9] = {};
+
   //expecting "velocity x.xx y.yy z.zz"
   ret = std::sscanf(msg, "%8s %f %f %f", str, &vx, &vy, &vz);
   if ((ret == 4) && (strcmp(str, "velocity") == 0)) {
@@ -1301,6 +1305,15 @@ void DemoReadHudMessage() {
     hackvel.vy = vy;
     hackvel.vz = vz;
   }
+
+  // expecting "rotvel x.xx y.yy z.zz"
+  if ((ret == 4) && (strcmp(str, "rotvel") == 0)) {
+
+    hackvel_rot.vx = vx;
+    hackvel_rot.vy = vy;
+    hackvel_rot.vz = vz;
+  }
+
 
   //retrieve og gameFrame number
   char str2[10] = {};
