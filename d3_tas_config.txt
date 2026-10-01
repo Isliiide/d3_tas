@@ -1,34 +1,39 @@
-fixedGameFrameRate 1
+fixedGameFrameRate 0
 slomoFactor 4
 slomoAudioFactor 1
-demoStartFrame 500
+demoStartFrame 4300
+HUDmessageGameFrame 0
+HUDmessageVelocity 0
+autoRecordAfterNCutscenes 0
 
 
-
+//----------------------------------------------------
+// help
+//----------------------------------------------------
+// ! the parsing function for this file has a hardcoded number of lines to read, think about updating that
 
 //fixedGameFrameRate 0 or 1
 
 //slomoFactor 1 or 2 or 4 or 8
 //slomAudioFactor 1 or 2 or 4 or 8
 
-
 //demoStartFrame (any number)
 
-//------------------------------------
-//not implemented yet
+//HUDmessageGameFrame 0 or 1
+//HUDmessageVelocity 0 or 1
 
-autoRecordDemo 1
-verboseHUDmessages 1
-afterburnerHack 1
+//autoRecordAfterNCutscenes (any number, default 1) 0 for disabling (you have to count the number of camera changes in the intro cutscene, lv10, lv13)
+
+
+
+
+//----------------------------------------------------
+// not implemented yet
+//----------------------------------------------------
+
+
+afterburnerHack 1  ; but its' already on a toggle key
 diagonalControls 0
 
-
-//autoRecordDemo 0 or 1
-
-//verboseHUDmessages 0 or 1
-
-
-
-//afterburnerHack 0 or 1
 
 //diagonalControls 0 or 1

@@ -502,12 +502,13 @@ int get_game_frame_number() {
 
 //---------------------
 
-//islide : to skip the pop up menu
+
 int count_level_cutscenes = 0;
 void reset_count_level_cutscenes() { count_level_cutscenes = 0; }
 void inc_count_level_cutscenes() { count_level_cutscenes ++; }
 int get_count_level_cutscenes() { return count_level_cutscenes; }
 
+// islide : to record demos without the pop up menu asking for file name
 void createDemoFileAndStartRec(char *filename) {
 
   std::filesystem::path demo_directory = cf_GetWritableBaseDirectory() / "demo";

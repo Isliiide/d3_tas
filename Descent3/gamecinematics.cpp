@@ -214,6 +214,8 @@
 #include "multi.h"
 #include "weapon.h"
 
+#include "gameloop.h" //islide : to get the update from config file function
+
 #if (defined(_DEBUG) || defined(EDITOR))
 bool Cinematics_enabled = true;
 extern int DoAI;
@@ -983,7 +985,7 @@ void Cinematic_Stop(void) {
   //-----------------------
 
   // automatically starts recording after intro cutscene
-  if ((Demo_flags != DF_PLAYBACK) && get_count_level_cutscenes() == 0) {
+  if ((Demo_flags != DF_PLAYBACK) && get_count_level_cutscenes() == (get_auto_record_after_n_cutscenes()-1)) {
     createDemoFileAndStartRec("autodemo");
   }
   inc_count_level_cutscenes();

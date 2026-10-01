@@ -902,7 +902,7 @@ int update_value_from_config_file(const char *name_of_value, int *value_to_updat
   char variable_name_buffer[64] = {};
   int int_buffer = 0;
 
-  int expecting_n_vars = 4; // hardcoded
+  int expecting_n_vars = 7; // hardcoded
   for (int i = 0; i < expecting_n_vars; i++) {
 
     tas_config >> variable_name_buffer;
@@ -917,6 +917,13 @@ int update_value_from_config_file(const char *name_of_value, int *value_to_updat
 }
 
 int fixed_game_frame_rate = 0; // islide
+int HUD_message_game_frame = 0;
+
+int HUD_message_velocity = 0;
+int get_HUD_message_velocity() { return HUD_message_velocity; }
+
+int auto_record_after_n_cutscenes = 0;
+int get_auto_record_after_n_cutscenes() { return auto_record_after_n_cutscenes; }
 
 //----------------------
 
@@ -3088,12 +3095,15 @@ void GameFrame(void) {
   INT64 curr_time;
 #endif
 
-  //islide
+  //islide - config file initialization
   if (count_gameFrame == 0) {
   
       update_value_from_config_file("fixedGameFrameRate", &fixed_game_frame_rate);
+      update_value_from_config_file("HUDmessageGameFrame", &HUD_message_game_frame);
+      update_value_from_config_file("HUDmessageVelocity", &HUD_message_velocity);
+      update_value_from_config_file("autoRecordAfterNCutscenes", &auto_record_after_n_cutscenes);
       //
-  
+     
   }
 
 
@@ -3181,10 +3191,9 @@ void GameFrame(void) {
     if (Demo_flags != DF_PLAYBACK) {
       // AddHUDMessage("GameFrame : %d + %d/%d", count_gameFrame, (count_gameFrame_substep+1), slomo_factor);
       // //Frames_counted); // islide
-      bool verbose_HUD_message = true;
-      if (verbose_HUD_message) {
-        AddHUDMessage("GameFrame : %d + %d / 8", count_gameFrame,
-                      count_gameFrame_substep); // Frames_counted); // islide
+      
+      if (HUD_message_game_frame) {
+        AddHUDMessage("GameFrame : %d + %d / 8", count_gameFrame, count_gameFrame_substep); // Frames_counted); // islide
       }
       
     }

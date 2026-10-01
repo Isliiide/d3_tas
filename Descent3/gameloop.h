@@ -132,6 +132,8 @@ void ResumeGame();
 //   this is used across a number of .cpp files to conveniently read from this config file
 int update_value_from_config_file(const char *name_of_value, int *value_to_update);
 int get_slomo_factor();
+int get_HUD_message_velocity();
+int get_auto_record_after_n_cutscenes();
 
 
 

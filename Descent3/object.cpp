@@ -2454,8 +2454,7 @@ void DoFlyingControl(object *objp) {
 
     velocity_old = objp->mtype.phys_info.velocity;
 
-    bool verbose_HUD_messages = true;
-    if (verbose_HUD_messages) {
+    if (get_HUD_message_velocity()) {
 
       // ss_velocity.clear();
       float vx = objp->mtype.phys_info.velocity.x();
